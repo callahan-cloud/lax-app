@@ -11,73 +11,50 @@ st.caption("Real-time D1, D2, & D3 Data | Ad-Free")
 
 # 2. Advanced Scraper with Error Handling
 def get_data(div, mode="polls"):
-    # Using a Session makes the "handshake" with the website more reliable
-    session = requests.Session()
     headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.google.com/"
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
     }
     
+    # Map 'D1' to the NCAA's internal numbering
+    div_map = {"D1": "1", "D2": "2", "D3": "3"}
+    d_num = div_map.get(div, "1")
+
     try:
         if mode == "polls":
-            # USILA direct links for 2026
-            div_map = {
-                "D1": "https://usila.org/sports/2022/2/10/div-i-mens-poll.aspx",
-                "D2": "https://usila.org/sports/2022/2/10/div-ii-mens-poll.aspx",
-                "D3": "https://usila.org/sports/2022/2/10/div-iii-mens-poll.aspx"
-            }
-            url = div_map[div]
+            # Direct link to the official NCAA Rankings JSON (Fast & Reliable)
+            url = f"https://data.ncaa.com/casablanca/rankings/lacrosse-men/d{d_num}/usila-coaches-poll/data.json"
+            resp = requests.get(url, headers=headers, timeout=10)
+            data = resp.json()
             
-            response = session.get(url, headers=headers, timeout=15)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Target the specific table rows in the USILA 'sidearm' stats layout
-            rows = soup.find_all('tr')
-            poll_data = []
-            
-            for row in rows:
-                cols = row.find_all('td')
-                if len(cols) >= 2:
-                    rank = cols[0].get_text(strip=True)
-                    # Only grab rows where the first column is a number (the Rank)
-                    if rank.isdigit():
-                        poll_data.append({
-                            "Rank": rank,
-                            "Team": cols[1].get_text(strip=True),
-                            "Record/Pts": cols[2].get_text(strip=True) if len(cols) > 2 else "-"
-                        })
-            
-            return pd.DataFrame(poll_data).head(20)
+            poll_list = []
+            for item in data['rankings']:
+                poll_list.append({
+                    "Rank": item['current_rank'],
+                    "Team": item['name'],
+                    "Record": item.get('record', '-')
+                })
+            return pd.DataFrame(poll_list)
 
         else:
-            # Inside Lacrosse Scoreboard
-            d_num = div[1]
-            url = f"https://www.insidelacrosse.com/ncaa/m/{d_num}/2026/scores"
-            resp = session.get(url, headers=headers, timeout=15)
-            soup = BeautifulSoup(resp.text, 'html.parser')
+            # Direct link to the NCAA Scoreboard JSON
+            # This is the "Gold Standard" for live scores
+            url = f"https://data.ncaa.com/casablanca/scoreboard/lacrosse-men/d{d_num}/2026/02/26/scoreboard.json"
+            resp = requests.get(url, headers=headers, timeout=10)
+            data = resp.json()
             
             games = []
-            # Updated selectors for the 2026 IL Layout
-            for card in soup.select('.game-score-card, .score-strip, .event-card'):
-                names = [n.get_text(strip=True) for n in card.select('.team-name, .name')]
-                scores = [s.get_text(strip=True) for s in card.select('.team-score, .score')]
-                status = card.select_one('.game-status, .status, .time')
-                
-                if len(names) >= 2:
-                    games.append({
-                        "Matchup": f"{names[0]} @ {names[1]}",
-                        "Score": f"{scores[0]}-{scores[1]}" if len(scores) >= 2 else "TBD",
-                        "Status": status.get_text(strip=True) if status else "Scheduled"
-                    })
+            for game in data.get('games', []):
+                game_info = game.get('game', {})
+                games.append({
+                    "Matchup": f"{game_info['away']['names']['short']} @ {game_info['home']['names']['short']}",
+                    "Score": f"{game_info['away']['score']} - {game_info['home']['score']}",
+                    "Status": game_info.get('gameState', 'Scheduled')
+                })
             return pd.DataFrame(games)
 
     except Exception as e:
-        # This will print the actual error to your app screen so we can see it
-        st.error(f"⚠️ Connection Issue: {str(e)}")
+        st.error(f"⚠️ Data Feed Issue: {str(e)}")
         return pd.DataFrame()
-
 # 3. The UI
 tab1, tab2 = st.tabs(["📊 Top 20 Polls", "⏱️ Live Scoreboard"])
 
@@ -111,6 +88,7 @@ with tab2:
 
 st.divider()
 st.caption("Built for Lax Fans. No Ads. No BS.")
+
 
 
 
