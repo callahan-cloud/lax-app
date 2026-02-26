@@ -4,109 +4,97 @@ import requests
 from datetime import datetime
 import pytz
 
-# 1. Page Configuration for Mobile
-st.set_page_config(page_title="LaxScore Clean", layout="centered", page_icon="🥍")
+# 1. Page Configuration
+st.set_page_config(page_title="LaxScore Hub", layout="centered", page_icon="🥍")
 
-# Custom CSS for a clean, dark sports interface
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; color: white; }
-    div[data-testid="stMetricValue"] { font-size: 1.2rem; }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { 
-        background-color: #1e2129; 
-        border-radius: 5px; 
-        padding: 10px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 2. Hardened Data Fetching Logic
+# 2. Dynamic Data Fetching
 def get_data(div_choice, mode="polls"):
     headers = {
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
         "Referer": "https://www.ncaa.com/",
-        "Accept": "application/json"
     }
     
-    # Map selection to NCAA URL segments
     div_path = {"D1": "d1", "D2": "d2", "D3": "d3"}[div_choice]
     
+    # Get Today's Date for the Scoreboard
+    tz = pytz.timezone('US/Eastern')
+    today = datetime.now(tz)
+    date_str = today.strftime("%Y/%m/%d") # Format: 2026/02/26
+
     try:
         if mode == "polls":
-            # Target the USILA Coaches Poll JSON
+            # Direct USILA Coaches Poll Path
             url = f"https://data.ncaa.com/casablanca/rankings/lacrosse-men/{div_path}/usila-coaches-poll/data.json"
             resp = requests.get(url, headers=headers, timeout=10)
             data = resp.json()
             
-            # The "Full List" is usually in the 'rankings' key
-            # If that's missing, we check 'ranks' or the general data object
-            raw_list = data.get('rankings', data.get('ranks', []))
-            
-            poll_results = []
-            for item in raw_list:
-                poll_results.append({
-                    "Rank": item.get('current_rank', item.get('rank', '-')),
-                    "Team": item.get('name', item.get('school', 'Unknown')),
-                    "Points": item.get('points', '-'),
+            # NCAA JSONs often nest data under 'rankings'
+            raw_data = data.get('rankings', [])
+            if not raw_data:
+                return pd.DataFrame()
+                
+            poll_list = []
+            for item in raw_data:
+                poll_list.append({
+                    "Rank": item.get('current_rank', '-'),
+                    "Team": item.get('name', 'Unknown'),
                     "Record": item.get('record', '-')
                 })
-            return pd.DataFrame(poll_results)
+            return pd.DataFrame(poll_list)
 
         else:
-            # Scoreboard Logic (Set for today: Feb 26, 2026)
-            url = f"https://data.ncaa.com/casablanca/scoreboard/lacrosse-men/{div_path}/2026/02/26/scoreboard.json"
+            # Scoreboard Logic - Using the dynamic date
+            url = f"https://data.ncaa.com/casablanca/scoreboard/lacrosse-men/{div_path}/{date_str}/scoreboard.json"
             resp = requests.get(url, headers=headers, timeout=10)
-            if resp.status_code != 200: return pd.DataFrame()
+            
+            if resp.status_code != 200:
+                return pd.DataFrame() # No games today
             
             data = resp.json()
             games = []
             for g in data.get('games', []):
-                game_data = g.get('game', {})
+                game_info = g.get('game', {})
                 games.append({
-                    "Matchup": f"{game_data['away']['names']['short']} @ {game_data['home']['names']['short']}",
-                    "Score": f"{game_data['away']['score']} - {game_data['home']['score']}",
-                    "Status": game_data.get('gameState', 'Scheduled')
+                    "Matchup": f"{game_info['away']['names']['short']} @ {game_info['home']['names']['short']}",
+                    "Score": f"{game_info['away']['score']} - {game_info['home']['score']}",
+                    "Status": game_info.get('gameState', 'Scheduled')
                 })
             return pd.DataFrame(games)
 
-    except Exception:
+    except Exception as e:
+        # This will show you exactly what is failing in the background
+        st.sidebar.error(f"Debug: {str(e)}")
         return pd.DataFrame()
 
-# 3. Main UI App Layout
-st.title("🥍 LaxScore Clean")
+# 3. UI Construction
+st.title("🥍 LaxScore Hub")
 
-tab1, tab2 = st.tabs(["📊 Top 20 Polls", "⏱️ Live Scores"])
+tab1, tab2 = st.tabs(["📊 Polls", "⏱️ Scores"])
 
 with tab1:
-    poll_div = st.segmented_control("Select Division", ["D1", "D2", "D3"], default="D1", key="p_div")
-    df_poll = get_data(poll_div, mode="polls")
-    
-    if not df_poll.empty:
-        st.dataframe(df_poll, use_container_width=True, hide_index=True)
+    p_div = st.segmented_control("Division", ["D1", "D2", "D3"], default="D1", key="p")
+    p_df = get_data(p_div, mode="polls")
+    if not p_df.empty:
+        st.table(p_df)
     else:
-        st.info(f"The {poll_div} Poll is currently updating. Check back shortly.")
+        st.warning(f"No {p_div} Poll data found. The NCAA may be updating their server.")
 
 with tab2:
-    score_div = st.segmented_control("Select Division", ["D1", "D2", "D3"], default="D1", key="s_div")
-    if st.button("🔄 Refresh Scores"):
-        st.cache_data.clear()
-        
-    df_scores = get_data(score_div, mode="scores")
-    
-    if not df_scores.empty:
-        for _, row in df_scores.iterrows():
+    s_div = st.segmented_control("Division", ["D1", "D2", "D3"], default="D1", key="s")
+    s_df = get_data(s_div, mode="scores")
+    if not s_df.empty:
+        for _, row in s_df.iterrows():
             with st.container(border=True):
-                c1, c2 = st.columns([3, 1])
-                c1.write(f"**{row['Matchup']}**")
-                c2.write(f"`{row['Score']}`")
+                col1, col2 = st.columns([3, 1])
+                col1.write(f"**{row['Matchup']}**")
+                col2.write(f"`{row['Score']}`")
                 st.caption(f"Status: {row['Status']}")
     else:
-        st.info(f"No live {score_div} games found for today.")
+        st.info(f"No {s_div} games scheduled for today ({datetime.now(pytz.timezone('US/Eastern')).strftime('%b %d')}).")
 
-# 4. Footer with Time Stamp
+# 4. Refresh & Timestamp
 st.divider()
-# Use Eastern Time for US Lacrosse standard
 now = datetime.now(pytz.timezone('US/Eastern'))
-st.caption(f"Last Sync: {now.strftime('%b %d, %I:%M %p')} ET")
-st.caption("Data: NCAA/USILA Coaches Poll. No Ads.")
+st.caption(f"Last Sync: {now.strftime('%I:%M %p')} ET")
+if st.button("🔄 Force Refresh"):
+    st.cache_data.clear()
