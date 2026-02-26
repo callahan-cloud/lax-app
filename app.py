@@ -3,6 +3,11 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
+st.set_page_config(
+    page_title="LaxScore",
+    page_icon="icon.png.png"  # This tells the app to use your image!
+)
+
 # Add this near the top of your code
 st.empty() # Clears old data
 st.cache_data.clear() # Forces a fresh scrape
@@ -86,4 +91,5 @@ with tab2:
             st.caption(f"Status: {row['Status']}")
 
 st.divider()
+
 st.info("Tip: Add this page to your iPhone/Android Home Screen for one-tap access.")
