@@ -10,56 +10,61 @@ st.title("🥍 LaxScore Hub")
 st.caption("Real-time D1, D2, & D3 Data | Ad-Free")
 
 # 2. Advanced Scraper with Error Handling
-def get_data(div, mode="scores"):
+def get_data(div, mode="polls"):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
     }
     
     try:
         if mode == "polls":
-            # Target USILA Polls
+            # USILA often changes their homepage structure
             url = "https://usila.org/"
-            response = requests.get(url, headers=headers, timeout=10)
-            tables = pd.read_html(response.text)
+            response = requests.get(url, headers=headers, timeout=15)
             
-            # Select table based on Division
-            idx = {"D1": 0, "D2": 1, "D3": 2}
-            df = tables[idx[div]].copy()
+            # This is the "Magic" line: we tell pandas to use the 'lxml' engine explicitly
+            tables = pd.read_html(response.text, flavor='lxml')
             
-            # Clean up: USILA tables vary, so we force standard column names
-            df.columns = [str(c) for c in df.columns] # Ensure strings
-            return df.iloc[:, :3] # Just take first 3 columns (Rank, Team, Points/Record)
+            # Map Table Index (D1 is usually the first table found)
+            idx_map = {"D1": 0, "D2": 1, "D3": 2}
+            target_idx = idx_map.get(div, 0)
+            
+            if len(tables) > target_idx:
+                df = tables[target_idx].copy()
+                # Clean up column names to avoid "Unnamed" errors
+                df.columns = [f"Col_{i}" for i in range(len(df.columns))]
+                # Rename the ones we want
+                df = df.rename(columns={"Col_0": "Rank", "Col_1": "Team", "Col_2": "Record/Pts"})
+                return df[["Rank", "Team", "Record/Pts"]].head(20)
+            
+            return pd.DataFrame()
 
         else:
-            # Target Live Scores
-            # Note: Division 1 is '1', Division 2 is '2', etc.
-            div_num = div[1] 
-            url = f"https://www.insidelacrosse.com/ncaa/m/{div_num}/2026/scores"
-            resp = requests.get(url, headers=headers, timeout=10)
+            # Scoreboard Logic (Inside Lacrosse)
+            # Use the division number from the selection (e.g., 'D1' -> '1')
+            d_num = div[1]
+            url = f"https://www.insidelacrosse.com/ncaa/m/{d_num}/2026/scores"
+            resp = requests.get(url, headers=headers, timeout=15)
             soup = BeautifulSoup(resp.text, 'html.parser')
             
             games = []
-            # Updated selector to be more broad to catch different site layouts
-            for card in soup.select('div[class*="game-score"], div[class*="game-card"]'):
-                try:
-                    teams = [t.text.strip() for t in card.select('div[class*="team-name"]')]
-                    scores = [s.text.strip() for s in card.select('div[class*="score"]')]
-                    status = card.select_one('div[class*="status"]')
-                    
-                    if len(teams) >= 2:
-                        games.append({
-                            "Matchup": f"{teams[0]} vs {teams[1]}",
-                            "Score": f"{scores[0]} - {scores[1]}" if len(scores) >= 2 else "TBD",
-                            "Status": status.text.strip() if status else "Scheduled"
-                        })
-                except:
-                    continue
-            
+            # IL uses 'game-row' or 'score-card' depending on mobile/desktop view
+            for card in soup.find_all('div', class_=lambda x: x and ('game' in x or 'score' in x)):
+                names = [n.text.strip() for n in card.find_all(class_=lambda x: x and 'name' in x)]
+                pts = [p.text.strip() for p in card.find_all(class_=lambda x: x and 'score' in x)]
+                
+                if len(names) >= 2:
+                    games.append({
+                        "Matchup": f"{names[0]} @ {names[1]}",
+                        "Score": f"{pts[0]}-{pts[1]}" if len(pts) >= 2 else "TBD",
+                        "Status": "Final" if "Final" in card.text else "Live/Scheduled"
+                    })
             return pd.DataFrame(games)
 
     except Exception as e:
-        # Return an empty dataframe with a note instead of crashing
-        return pd.DataFrame(columns=["Matchup", "Score", "Status"])
+        # This will show you the ACTUAL error in the app UI for debugging
+        st.error(f"Debug Info: {str(e)}")
+        return pd.DataFrame()
 
 # 3. The UI
 tab1, tab2 = st.tabs(["📊 Top 20 Polls", "⏱️ Live Scoreboard"])
@@ -94,3 +99,4 @@ with tab2:
 
 st.divider()
 st.caption("Built for Lax Fans. No Ads. No BS.")
+
