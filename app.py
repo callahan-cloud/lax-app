@@ -27,45 +27,30 @@ st.title("🥍 LaxScore Hub")
 st.caption("Real-time D1, D2, & D3 Data | Ad-Free")
 
 # 2. Data Fetching Logic
-def get_data(div, mode="scores"):
-    # We use a mobile headers to ensure the site serves us the clean version
+def get_data(div, mode="polls"):
+    # This header is more detailed to look exactly like a Chrome browser
     headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
     }
     
     if mode == "polls":
-        # Pulling Rankings (Example: USILA/NCAA structure)
         url = "https://usila.org/" 
         try:
-            tables = pd.read_html(requests.get(url, headers=headers).text)
-            idx = {"D1": 0, "D2": 1, "D3": 2}
-            return tables[idx[div]].head(20)[['Rank', 'Team', 'Points']]
-        except:
-            return pd.DataFrame({"Rank": ["N/A"], "Team": ["Polls updating..."], "Points": ["-"]})
-
-    else:
-        # Pulling Live Scores from Inside Lacrosse
-        url = f"https://www.insidelacrosse.com/ncaa/m/{div[1]}/2026/scores"
-        try:
-            resp = requests.get(url, headers=headers)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            games = []
+            # We fetch the page first, then hand it to Pandas
+            response = requests.get(url, headers=headers, timeout=10)
+            tables = pd.read_html(response.text)
             
-            # This targets the specific score containers on the page
-            for card in soup.find_all('div', class_='game-score-card'):
-                teams = card.find_all('div', class_='team-name')
-                scores = card.find_all('div', class_='team-score')
-                status = card.find('div', class_='game-status')
-                
-                if len(teams) >= 2:
-                    games.append({
-                        "Matchup": f"{teams[0].text.strip()} @ {teams[1].text.strip()}",
-                        "Score": f"{scores[0].text.strip()} - {scores[1].text.strip()}",
-                        "Status": status.text.strip() if status else "Scheduled"
-                    })
-            return pd.DataFrame(games)
-        except:
-            return pd.DataFrame({"Matchup": ["No live games found"], "Score": ["-"], "Status": ["Check back soon"]})
+            # Division Map: D1 is usually table 0, D2 is 1, D3 is 2
+            idx = {"D1": 0, "D2": 1, "D3": 2}
+            df = tables[idx[div]]
+            
+            # Clean up columns (Standardizing common USILA headers)
+            df.columns = ['Rank', 'Team', 'Record', 'Points', 'First Place']
+            return df[['Rank', 'Team', 'Points']]
+        except Exception as e:
+            # This helps us see the error in the app
+            return pd.DataFrame({"Error": [f"Could not reach polls: {str(e)}"]})
 
 # 3. App Tabs
 tab1, tab2 = st.tabs(["📊 Top 20 Polls", "⏱️ Live Scoreboard"])
@@ -93,3 +78,4 @@ with tab2:
 st.divider()
 
 st.info("Tip: Add this page to your iPhone/Android Home Screen for one-tap access.")
+
