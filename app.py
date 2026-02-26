@@ -3,79 +3,94 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-st.set_page_config(
-    page_title="LaxScore",
-    page_icon="icon.png.png"  # This tells the app to use your image!
-)
-
-# Add this near the top of your code
-st.empty() # Clears old data
-st.cache_data.clear() # Forces a fresh scrape
-
-# 1. Page Configuration for Mobile
-st.set_page_config(page_title="LaxScore Clean", layout="centered")
-
-# Custom CSS to make it look like a dark-mode sports app
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; }
-    div[data-testid="stMetricValue"] { font-size: 1.5rem; }
-    </style>
-    """, unsafe_allow_html=True)
+# 1. Page Configuration
+st.set_page_config(page_title="LaxScore Clean", layout="centered", page_icon="🥍")
 
 st.title("🥍 LaxScore Hub")
 st.caption("Real-time D1, D2, & D3 Data | Ad-Free")
 
-# 2. Data Fetching Logic
-def get_data(div, mode="polls"):
-    # This header is more detailed to look exactly like a Chrome browser
+# 2. Advanced Scraper with Error Handling
+def get_data(div, mode="scores"):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
-    if mode == "polls":
-        url = "https://usila.org/" 
-        try:
-            # We fetch the page first, then hand it to Pandas
+    try:
+        if mode == "polls":
+            # Target USILA Polls
+            url = "https://usila.org/"
             response = requests.get(url, headers=headers, timeout=10)
             tables = pd.read_html(response.text)
             
-            # Division Map: D1 is usually table 0, D2 is 1, D3 is 2
+            # Select table based on Division
             idx = {"D1": 0, "D2": 1, "D3": 2}
-            df = tables[idx[div]]
+            df = tables[idx[div]].copy()
             
-            # Clean up columns (Standardizing common USILA headers)
-            df.columns = ['Rank', 'Team', 'Record', 'Points', 'First Place']
-            return df[['Rank', 'Team', 'Points']]
-        except Exception as e:
-            # This helps us see the error in the app
-            return pd.DataFrame({"Error": [f"Could not reach polls: {str(e)}"]})
+            # Clean up: USILA tables vary, so we force standard column names
+            df.columns = [str(c) for c in df.columns] # Ensure strings
+            return df.iloc[:, :3] # Just take first 3 columns (Rank, Team, Points/Record)
 
-# 3. App Tabs
+        else:
+            # Target Live Scores
+            # Note: Division 1 is '1', Division 2 is '2', etc.
+            div_num = div[1] 
+            url = f"https://www.insidelacrosse.com/ncaa/m/{div_num}/2026/scores"
+            resp = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            
+            games = []
+            # Updated selector to be more broad to catch different site layouts
+            for card in soup.select('div[class*="game-score"], div[class*="game-card"]'):
+                try:
+                    teams = [t.text.strip() for t in card.select('div[class*="team-name"]')]
+                    scores = [s.text.strip() for s in card.select('div[class*="score"]')]
+                    status = card.select_one('div[class*="status"]')
+                    
+                    if len(teams) >= 2:
+                        games.append({
+                            "Matchup": f"{teams[0]} vs {teams[1]}",
+                            "Score": f"{scores[0]} - {scores[1]}" if len(scores) >= 2 else "TBD",
+                            "Status": status.text.strip() if status else "Scheduled"
+                        })
+                except:
+                    continue
+            
+            return pd.DataFrame(games)
+
+    except Exception as e:
+        # Return an empty dataframe with a note instead of crashing
+        return pd.DataFrame(columns=["Matchup", "Score", "Status"])
+
+# 3. The UI
 tab1, tab2 = st.tabs(["📊 Top 20 Polls", "⏱️ Live Scoreboard"])
 
 with tab1:
-    div_poll = st.segmented_control("Division", ["D1", "D2", "D3"], default="D1", key="poll_div")
+    div_poll = st.pills("Division", ["D1", "D2", "D3"], default="D1", key="p_div")
     poll_df = get_data(div_poll, mode="polls")
-    st.table(poll_df)
+    
+    if not poll_df.empty:
+        st.dataframe(poll_df, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Could not load polls. The source site might be down.")
 
 with tab2:
-    div_score = st.segmented_control("Division", ["D1", "D2", "D3"], default="D1", key="score_div")
-    if st.button("🔄 Refresh Scores"):
+    div_score = st.pills("Division", ["D1", "D2", "D3"], default="D1", key="s_div")
+    
+    if st.button("🔄 Refresh Data"):
         st.cache_data.clear()
     
     score_df = get_data(div_score, mode="scores")
     
-    # Display as clean cards
-    for _, row in score_df.iterrows():
-        with st.container(border=True):
-            col1, col2 = st.columns([2, 1])
-            col1.write(f"**{row['Matchup']}**")
-            col2.write(f"`{row['Score']}`")
-            st.caption(f"Status: {row['Status']}")
+    # THE FIX: Check if the dataframe is empty before looping
+    if isinstance(score_df, pd.DataFrame) and not score_df.empty:
+        for _, row in score_df.iterrows():
+            with st.container(border=True):
+                col1, col2 = st.columns([3, 1])
+                col1.write(f"**{row['Matchup']}**")
+                col2.write(f"`{row['Score']}`")
+                st.caption(f"Status: {row['Status']}")
+    else:
+        st.info(f"No live {div_score} scores found for today. Check back during game time!")
 
 st.divider()
-
-st.info("Tip: Add this page to your iPhone/Android Home Screen for one-tap access.")
-
+st.caption("Built for Lax Fans. No Ads. No BS.")
