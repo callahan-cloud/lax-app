@@ -11,49 +11,64 @@ st.caption("Real-time D1, D2, & D3 Data | Ad-Free")
 
 # 2. Advanced Scraper with Error Handling
 def get_data(div, mode="polls"):
+    # Hardened headers to bypass NCAA bot detection
     headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Referer": "https://www.ncaa.com/",
+        "Origin": "https://www.ncaa.com"
     }
     
-    # Map 'D1' to the NCAA's internal numbering
     div_map = {"D1": "1", "D2": "2", "D3": "3"}
     d_num = div_map.get(div, "1")
 
     try:
         if mode == "polls":
-            # Direct link to the official NCAA Rankings JSON (Fast & Reliable)
+            # Using the specific USILA coaches poll path
             url = f"https://data.ncaa.com/casablanca/rankings/lacrosse-men/d{d_num}/usila-coaches-poll/data.json"
             resp = requests.get(url, headers=headers, timeout=10)
+            
+            # Safety check: if it's not JSON, it will raise an error here
             data = resp.json()
             
             poll_list = []
-            for item in data['rankings']:
+            for item in data.get('rankings', []):
                 poll_list.append({
-                    "Rank": item['current_rank'],
-                    "Team": item['name'],
+                    "Rank": item.get('current_rank', '-'),
+                    "Team": item.get('name', 'Unknown'),
                     "Record": item.get('record', '-')
                 })
             return pd.DataFrame(poll_list)
 
         else:
-            # Direct link to the NCAA Scoreboard JSON
-            # This is the "Gold Standard" for live scores
+            # Scoreboard Logic
+            # Note: We use today's date based on the system (Feb 26, 2026)
             url = f"https://data.ncaa.com/casablanca/scoreboard/lacrosse-men/d{d_num}/2026/02/26/scoreboard.json"
             resp = requests.get(url, headers=headers, timeout=10)
-            data = resp.json()
             
-            games = []
-            for game in data.get('games', []):
-                game_info = game.get('game', {})
-                games.append({
-                    "Matchup": f"{game_info['away']['names']['short']} @ {game_info['home']['names']['short']}",
-                    "Score": f"{game_info['away']['score']} - {game_info['home']['score']}",
-                    "Status": game_info.get('gameState', 'Scheduled')
+            if resp.status_code != 200:
+                return pd.DataFrame(columns=["Matchup", "Score", "Status"])
+                
+            data = resp.json()
+            games_list = []
+            for g in data.get('games', []):
+                # Digging into the NCAA's complex JSON structure
+                home = g['game']['home']['names']['short']
+                away = g['game']['away']['names']['short']
+                h_score = g['game']['home']['score']
+                a_score = g['game']['away']['score']
+                status = g['game']['gameState']
+                
+                games_list.append({
+                    "Matchup": f"{away} @ {home}",
+                    "Score": f"{a_score} - {h_score}",
+                    "Status": status
                 })
-            return pd.DataFrame(games)
+            return pd.DataFrame(games_list)
 
     except Exception as e:
-        st.error(f"⚠️ Data Feed Issue: {str(e)}")
+        # Instead of crashing, we show the error and return an empty table
+        st.error(f"Waiting for Data: {div} {mode} might not be updated yet.")
         return pd.DataFrame()
 # 3. The UI
 tab1, tab2 = st.tabs(["📊 Top 20 Polls", "⏱️ Live Scoreboard"])
@@ -88,6 +103,7 @@ with tab2:
 
 st.divider()
 st.caption("Built for Lax Fans. No Ads. No BS.")
+
 
 
 
