@@ -2,73 +2,87 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
-import pytz
 
-# 1. Page Config
-st.set_page_config(page_title="LaxScore 2026", layout="centered", page_icon="🥍")
+# --- DATA SCRAPERS ---
 
-# 2. Hardcoded Current Data (Week 3 - Feb 2026) 
-# This ensures the app is NEVER empty even if the scraper fails
-def get_fallback_polls(div):
-    data = {
-        "D1": [
-            {"Rank": 1, "Team": "Notre Dame", "Pts": 578}, {"Rank": 2, "Team": "North Carolina", "Pts": 556},
-            {"Rank": 3, "Team": "Cornell", "Pts": 530}, {"Rank": 4, "Team": "Richmond", "Pts": 500},
-            {"Rank": 5, "Team": "Duke", "Pts": 477}, {"Rank": 6, "Team": "Harvard", "Pts": 455},
-            {"Rank": 7, "Team": "Syracuse", "Pts": 435}, {"Rank": 8, "Team": "Army", "Pts": 388},
-            {"Rank": 9, "Team": "Ohio State", "Pts": 387}, {"Rank": 10, "Team": "Princeton", "Pts": 373}
-        ],
-        "D2": [
-            {"Rank": 1, "Team": "Adelphi", "Pts": 398}, {"Rank": 2, "Team": "Tampa", "Pts": 381},
-            {"Rank": 3, "Team": "Saint Anselm", "Pts": 352}, {"Rank": 4, "Team": "Seton Hill", "Pts": 323},
-            {"Rank": 5, "Team": "Maryville", "Pts": 315}
-        ],
-        "D3": [
-            {"Rank": 1, "Team": "Tufts", "Pts": 538}, {"Rank": 2, "Team": "Salisbury", "Pts": 509},
-            {"Rank": 3, "Team": "Christopher Newport", "Pts": 484}, {"Rank": 4, "Team": "RIT", "Pts": 457},
-            {"Rank": 5, "Team": "Bowdoin", "Pts": 429}
-        ]
-    }
-    return pd.DataFrame(data.get(div, []))
+def get_rankings(div_id):
+    url = f"https://www.laxnumbers.com/ratings.php?v={div_id}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        df_list = pd.read_html(url)
+        df = df_list[0]
+        return df[['Rank', 'Team', 'Record', 'Rating']]
+    except:
+        return pd.DataFrame()
 
-# 3. Improved Scraper for Live Scores (Inside Lacrosse Fallback)
-def get_scores(div):
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
-    d_num = div[1]
-    url = f"https://www.insidelacrosse.com/ncaa/m/{d_num}/2026/scores"
-    
+def get_scores(div_id):
+    url = f"https://www.laxnumbers.com/scoreboard/{div_id}"
+    headers = {"User-Agent": "Mozilla/5.0"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
         games = []
-        for card in soup.select('.game-score-card, .score-strip'):
-            teams = [t.text.strip() for t in card.select('.team-name, .name')]
-            scores = [s.text.strip() for s in card.select('.team-score, .score')]
-            if len(teams) >= 2:
-                games.append({"Matchup": f"{teams[0]} @ {teams[1]}", "Score": "-".join(scores) if scores else "TBD"})
+        for game in soup.find_all('div', class_='row mb-2'):
+            teams = game.find_all('div', class_='col-8')
+            scores = game.find_all('div', class_='col-4')
+            if teams:
+                matchup = teams[0].get_text(strip=True)
+                res = scores[0].get_text(strip=True) if scores else "Scheduled"
+                games.append({"Matchup": matchup, "Status": res})
         return pd.DataFrame(games)
     except:
         return pd.DataFrame()
 
-# 4. App UI
-st.title("🥍 LaxScore 2026")
+# --- APP LAYOUT ---
 
-tab1, tab2 = st.tabs(["📊 Polls (Week 3)", "⏱️ Scores"])
+st.set_page_config(page_title="LaxScore Elite", layout="centered", page_icon="🥍")
+st.title("🥍 LaxScore Elite Hub")
+
+div_choice = st.sidebar.selectbox("Division", ["D1", "D2", "D3"])
+div_map = {"D1": "401", "D2": "402", "D3": "403"}
+current_id = div_map[div_choice]
+
+tab1, tab2, tab3 = st.tabs(["📊 Top 25", "⏱️ All Scores", "🔥 Top Matchups"])
+
+# PRE-FETCH DATA (To avoid multiple requests)
+rank_df = get_rankings(current_id)
+score_df = get_scores(current_id)
 
 with tab1:
-    div = st.segmented_control("Division", ["D1", "D2", "D3"], default="D1")
-    st.table(get_fallback_polls(div))
-    st.caption("Official USILA Coaches Poll (Updated Weekly)")
+    st.subheader(f"{div_choice} Power Rankings")
+    if not rank_df.empty:
+        st.table(rank_df.head(25))
 
 with tab2:
-    s_div = st.segmented_control("Scores Division", ["D1", "D2", "D3"], default="D1")
-    score_df = get_scores(s_div)
+    st.subheader(f"Full {div_choice} Scoreboard")
+    st.link_button("📺 Watch Live on ESPN+", "https://www.espn.com/watch/catalog/7783307b-8c43-34e4-96d5-a8c62c99c758/lacrosse", use_container_width=True)
     if not score_df.empty:
-        st.dataframe(score_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No live scores detected. Check back during game windows!")
+        for _, row in score_df.iterrows():
+            with st.container(border=True):
+                st.write(f"**{row['Matchup']}**")
+                st.caption(f"Result: {row['Status']}")
 
-st.divider()
-now = datetime.now(pytz.timezone('US/Eastern'))
-st.caption(f"App Active: {now.strftime('%b %d, %I:%M %p')} ET")
+with tab3:
+    st.subheader("🔥 Top 20 Matchups")
+    st.info("Showing games where at least one team is in the Top 20.")
+    
+    if not rank_df.empty and not score_df.empty:
+        # Get list of top 20 team names
+        top_20_teams = rank_df['Team'].head(20).tolist()
+        
+        found_matchup = False
+        for _, row in score_df.iterrows():
+            # Check if any top 20 team name is mentioned in the matchup string
+            if any(team.lower() in row['Matchup'].lower() for team in top_20_teams):
+                found_matchup = True
+                with st.container(border=True):
+                    st.write(f"🏆 **{row['Matchup']}**")
+                    st.write(f"Score/Time: `{row['Status']}`")
+        
+        if not found_matchup:
+            st.write("No ranked teams playing today.")
+    else:
+        st.write("Data currently unavailable for Top 20 filtering.")
+
+st.sidebar.markdown("---")
+st.sidebar.caption("Data: LaxNumbers.com")
