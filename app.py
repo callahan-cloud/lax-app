@@ -190,8 +190,13 @@ if not df.empty:
         hide_index=True, 
         height=(len(df) * 35) + 50,
         column_config={
-            # SETTING ALIGNMENT TO CENTER EXPLICITLY HERE
-            "#": st.column_config.Column(width=None, alignment="center"),
+            # Correction: Use NumberColumn to allow explicit center alignment
+            "#": st.column_config.NumberColumn(
+                label="#",
+                format="%d",
+                width=None, 
+                alignment="center"
+            ),
             "Date": st.column_config.Column(width=None),
             "Venue": st.column_config.Column(width=None),
             "Opponent": st.column_config.Column(width=None),
