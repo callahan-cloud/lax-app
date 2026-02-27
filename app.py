@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import re
 
-# --- FULL TOP 20 DIRECTORY ---
+# --- TOP 20 DIRECTORY ---
 SCHOOL_DATA = {
     "D1": {
         "Notre Dame": "https://fightingirish.com/sports/mlax/schedule/",
@@ -51,66 +52,61 @@ SCHOOL_DATA = {
     }
 }
 
+def clean_date(item):
+    """Specific logic to find Month/Day in the Sidearm 'Date' stack."""
+    # Try finding the specific date spans first
+    date_stack = item.select_one('.sidearm-schedule-game-upcoming-date, .sidearm-schedule-game-date')
+    if date_stack:
+        # Get all text inside (e.g., "Feb" and "27") and join them
+        text = date_stack.get_text(" ", strip=True)
+        # If it just says '2026', it's useless, so we look at the parent aria-label
+        if len(text) < 5 or text.isdigit():
+             label = item.get('aria-label', '')
+             match = re.search(r'[A-Z][a-z]{2}\s\d{1,2}', label)
+             return match.group(0) if match else text
+        return text
+    return "TBD"
+
 def get_school_scores(url, school_name):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
         games = []
 
-        # 1. UNC TEXT-ONLY LOGIC
+        # UNC - TEXT TABLE
         if "goheels.com" in url:
             table = soup.find('table')
             if table:
-                rows = table.find_all('tr')[1:] 
-                for row in rows:
+                for row in table.find_all('tr')[1:]:
                     cols = row.find_all('td')
                     if len(cols) >= 6:
-                        games.append({
-                            "Date": cols[0].get_text(" ", strip=True),
-                            "Opponent": cols[3].get_text(strip=True),
-                            "Result": cols[6].get_text(strip=True) if cols[6].get_text(strip=True) else "Scheduled"
-                        })
-
-        # 2. NOTRE DAME LOGIC (WMT)
+                        games.append({"Date": cols[0].get_text(strip=True), 
+                                      "Opponent": cols[3].get_text(strip=True), 
+                                      "Result": cols[6].get_text(strip=True) or "Scheduled"})
+        
+        # NOTRE DAME - WMT
         elif "fightingirish.com" in url:
             for item in soup.select('.c-event-card'):
                 opp = item.select_one('.c-event-card__opponent')
+                date = item.select_one('.c-event-card__date')
                 res = item.select_one('.c-event-card__score')
-                date_tag = item.select_one('.c-event-card__date')
                 if opp:
-                    games.append({
-                        "Date": date_tag.get_text(strip=True) if date_tag else "TBD",
-                        "Opponent": opp.get_text(strip=True), 
-                        "Result": res.get_text(strip=True) if res else "Upcoming"
-                    })
+                    games.append({"Date": date.text.strip() if date else "TBD", 
+                                  "Opponent": opp.text.strip(), 
+                                  "Result": res.text.strip() if res else "Upcoming"})
 
-        # 3. D3 / SIDEARM SPORTS FIX (The "Deeper Dive")
+        # SIDEARM (Most D1/D3 Schools)
         else:
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
                 res = item.select_one('.sidearm-schedule-game-result')
+                game_date = clean_date(item)
                 
-                # REVISED DATE LOGIC:
-                # First try: Look for the specific date container
-                date_el = item.select_one('.sidearm-schedule-game-upcoming-date')
-                if not date_el:
-                    date_el = item.select_one('.sidearm-schedule-game-date')
-                
-                # Second try: Fallback to the aria-label which almost always contains "Feb 27"
-                if date_el:
-                    # Some sites hide Month/Day in a sub-span
-                    clean_date = date_el.get_text(" ", strip=True)
-                    # If it's just the year, try the aria-label
-                    if clean_date == "2026" and item.has_attr('aria-label'):
-                        clean_date = item['aria-label'].split(" on ")[-1].split(" at ")[0]
-                else:
-                    clean_date = "TBD"
-
                 if opp:
                     games.append({
-                        "Date": clean_date,
-                        "Opponent": opp.get_text(strip=True).replace('Opponent:', '').strip(), 
+                        "Date": game_date,
+                        "Opponent": opp.get_text(strip=True).replace("Opponent:", "").strip(),
                         "Result": res.get_text(strip=True) if res else "Upcoming"
                     })
         
@@ -118,27 +114,23 @@ def get_school_scores(url, school_name):
     except:
         return pd.DataFrame()
 
-# --- UI ---
-st.set_page_config(page_title="LaxTracker Pro", layout="wide", page_icon="🥍")
+# --- APP UI ---
+st.set_page_config(page_title="LaxTracker Pro", layout="wide")
 st.title("🥍 Official Top 20 Tracker")
 
-div_choice = st.sidebar.radio("Select Division", ["D1", "D3"])
-target_team = st.sidebar.selectbox("Choose Team", list(SCHOOL_DATA[div_choice].keys()))
+div_choice = st.sidebar.radio("Division", ["D1", "D3"])
+target_team = st.sidebar.selectbox("Team", list(SCHOOL_DATA[div_choice].keys()))
 
-tab1, tab2 = st.tabs(["📅 Live Schedule", "📺 ESPN Scoreboard"])
+tab1, tab2 = st.tabs(["📅 Schedule", "📺 ESPN Scoreboard"])
 
 with tab1:
     url = SCHOOL_DATA[div_choice][target_team]
-    st.subheader(f"{target_team} Schedule")
     df = get_school_scores(url, target_team)
     if not df.empty:
-        # Using a table format for better readability on D3 dates
         st.table(df)
     else:
-        st.error("Live sync unavailable. The site may be blocking requests.")
-        st.link_button(f"🔗 View {target_team} Official Schedule", url)
+        st.error("Site structure blocked. Check the official link.")
+        st.link_button("Official Schedule", url)
 
 with tab2:
-    st.link_button("📺 Open ESPN Lacrosse Scoreboard", 
-                   "https://www.espn.com/mens-college-lacrosse/scoreboard", 
-                   use_container_width=True, type="primary")
+    st.link_button("📺 Open ESPN Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
