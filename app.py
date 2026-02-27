@@ -52,14 +52,22 @@ SCHOOL_DATA = {
     }
 }
 
-def clean_date(item):
-    """Specific logic to find Month/Day in the Sidearm 'Date' stack."""
-    # Try finding the specific date spans first
+# --- DATA HELPERS ---
+
+def get_team_record(soup):
+    """Attempts to find the team record (e.g., 4-1) in the header or sidebar."""
+    record_text = "Record: N/A"
+    # Common Sidearm/WMT patterns for records
+    targets = soup.find_all(text=re.compile(r'\d+-\d+'))
+    for t in targets:
+        if "Overall" in t.parent.text or "Record" in t.parent.text:
+            return t.parent.text.strip()
+    return record_text
+
+def clean_date_logic(item):
     date_stack = item.select_one('.sidearm-schedule-game-upcoming-date, .sidearm-schedule-game-date')
     if date_stack:
-        # Get all text inside (e.g., "Feb" and "27") and join them
         text = date_stack.get_text(" ", strip=True)
-        # If it just says '2026', it's useless, so we look at the parent aria-label
         if len(text) < 5 or text.isdigit():
              label = item.get('aria-label', '')
              match = re.search(r'[A-Z][a-z]{2}\s\d{1,2}', label)
@@ -67,11 +75,13 @@ def clean_date(item):
         return text
     return "TBD"
 
-def get_school_scores(url, school_name):
+def get_school_data(url):
     headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        record = get_team_record(soup)
         games = []
 
         # UNC - TEXT TABLE
@@ -83,7 +93,7 @@ def get_school_scores(url, school_name):
                     if len(cols) >= 6:
                         games.append({"Date": cols[0].get_text(strip=True), 
                                       "Opponent": cols[3].get_text(strip=True), 
-                                      "Result": cols[6].get_text(strip=True) or "Scheduled"})
+                                      "Status": cols[6].get_text(strip=True) or "Scheduled"})
         
         # NOTRE DAME - WMT
         elif "fightingirish.com" in url:
@@ -94,43 +104,31 @@ def get_school_scores(url, school_name):
                 if opp:
                     games.append({"Date": date.text.strip() if date else "TBD", 
                                   "Opponent": opp.text.strip(), 
-                                  "Result": res.text.strip() if res else "Upcoming"})
+                                  "Status": res.text.strip() if res else "Upcoming"})
 
-        # SIDEARM (Most D1/D3 Schools)
+        # SIDEARM (D1/D3)
         else:
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
                 res = item.select_one('.sidearm-schedule-game-result')
-                game_date = clean_date(item)
-                
+                game_date = clean_date_logic(item)
                 if opp:
                     games.append({
                         "Date": game_date,
                         "Opponent": opp.get_text(strip=True).replace("Opponent:", "").strip(),
-                        "Result": res.get_text(strip=True) if res else "Upcoming"
+                        "Status": res.get_text(strip=True) if res else "Scheduled"
                     })
         
-        return pd.DataFrame(games).drop_duplicates()
+        return record, pd.DataFrame(games).drop_duplicates()
     except:
-        return pd.DataFrame()
+        return "Record: N/A", pd.DataFrame()
 
-# --- APP UI ---
-st.set_page_config(page_title="LaxTracker Pro", layout="wide")
-st.title("🥍 Official Top 20 Tracker")
+# --- COLOR CODING LOGIC ---
 
-div_choice = st.sidebar.radio("Division", ["D1", "D3"])
-target_team = st.sidebar.selectbox("Team", list(SCHOOL_DATA[div_choice].keys()))
-
-tab1, tab2 = st.tabs(["📅 Schedule", "📺 ESPN Scoreboard"])
-
-with tab1:
-    url = SCHOOL_DATA[div_choice][target_team]
-    df = get_school_scores(url, target_team)
-    if not df.empty:
-        st.table(df)
-    else:
-        st.error("Site structure blocked. Check the official link.")
-        st.link_button("Official Schedule", url)
-
-with tab2:
-    st.link_button("📺 Open ESPN Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
+def style_status(val):
+    """Applies colors: Green for Wins, Red for Losses, Yellow for Live/Upcoming."""
+    color = 'white'
+    if 'W' in val: color = '#28a745' # Green
+    elif 'L' in val: color = '#dc3545' # Red
+    elif any(x in val.upper() for x in ['AM', 'PM', 'LIVE', 'TBD']): color = '#ffc107' # Yellow/Gold
+    return f
