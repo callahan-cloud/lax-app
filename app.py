@@ -5,20 +5,76 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 
-# --- DIRECTORY STRUCTURE ---
+# --- FULL DIRECTORY: TOP 20 RANKINGS ---
 SCHOOL_DATA = {
+    "Men's Lacrosse": {
+        "D3": {
+            "Tufts": "https://gotuftsjumbos.com/sports/mens-lacrosse/schedule/2026",
+            "Salisbury": "https://suseagulls.com/sports/mens-lacrosse/schedule/2026",
+            "RIT": "https://ritathletics.com/sports/mens-lacrosse/schedule/2026",
+            "Christopher Newport": "https://cnusports.com/sports/mens-lacrosse/schedule/2026",
+            "Bowdoin": "https://athletics.bowdoin.edu/sports/mens-lacrosse/schedule/2026",
+            "Wesleyan": "https://athletics.wesleyan.edu/sports/mens-lacrosse/schedule/2026",
+            "York (PA)": "https://ycpspartans.com/sports/mens-lacrosse/schedule/2026",
+            "Stevens": "https://stevensducks.com/sports/mens-lacrosse/schedule/2026",
+            "Gettysburg": "https://gettysburgsports.com/sports/mens-lacrosse/schedule/2026",
+            "SUNY Cortland": "https://www.cortlandreddragons.com/sports/mens-lacrosse/schedule/2026",
+            "St. Lawrence": "https://saintsathletics.com/sports/mens-lacrosse/schedule/2026",
+            "Dickinson": "https://dickinsonathletics.com/sports/mens-lacrosse/schedule/2026",
+            "Washington and Lee": "https://generalssports.com/sports/mens-lacrosse/schedule/2026",
+            "Amherst": "https://athletics.amherst.edu/sports/mens-lacrosse/schedule/2026",
+            "Lynchburg": "https://www.lynchburgsports.com/sports/mlax/schedule/2025-26",
+            "RPI": "https://rpiathletics.com/sports/mens-lacrosse/schedule/2026",
+            "Swarthmore": "https://swarthmoreathletics.com/sports/mens-lacrosse/schedule/2026",
+            "St. John Fisher": "https://athletics.sjf.edu/sports/mens-lacrosse/schedule/2026",
+            "Middlebury": "https://athletics.middlebury.edu/sports/mens-lacrosse/schedule/2026",
+            "Babson": "https://babsonathletics.com/sports/mens-lacrosse/schedule/2026"
+        },
+        "D1": {
+            "Notre Dame": "https://fightingirish.com/sports/mlax/schedule/",
+            "Duke": "https://goduke.com/sports/mens-lacrosse/schedule/2026",
+            "Virginia": "https://virginiasports.com/sports/mens-lacrosse/schedule/2026",
+            "Maryland": "https://umterps.com/sports/mens-lacrosse/schedule/2026",
+            "Johns Hopkins": "https://hopkinssports.com/sports/mens-lacrosse/schedule/2026",
+            "Denver": "https://denverpioneers.com/sports/mens-lacrosse/schedule/2026",
+            "Syracuse": "https://cuse.com/sports/mens-lacrosse/schedule/2026",
+            "Yale": "https://yalebulldogs.com/sports/mens-lacrosse/schedule/2026",
+            "Cornell": "https://cornellbigred.com/sports/mens-lacrosse/schedule/2026",
+            "Penn State": "https://gopsusports.com/sports/mens-lacrosse/schedule/2026",
+            "Princeton": "https://goprincetontigers.com/sports/mens-lacrosse/schedule/2026",
+            "Georgetown": "https://guhoyas.com/sports/mens-lacrosse/schedule/2026",
+            "Army": "https://goarmywestpoint.com/sports/mens-lacrosse/schedule/2026",
+            "Richmond": "https://richmondspiders.com/sports/mens-lacrosse/schedule/2026",
+            "Harvard": "https://gocrimson.com/sports/mens-lacrosse/schedule/2026",
+            "Rutgers": "https://scarletknights.com/sports/mens-lacrosse/schedule/2026",
+            "Ohio State": "https://ohiostatebuckeyes.com/sports/mens-lacrosse/schedule/2026",
+            "Saint Joseph's": "https://sjuhawks.com/sports/mens-lacrosse/schedule/2026",
+            "Penn": "https://pennathletics.com/sports/mens-lacrosse/schedule/2026",
+            "Towson": "https://towsontigers.com/sports/mens-lacrosse/schedule/2026"
+        }
+    },
     "Women's Lacrosse": {
         "D3": {
             "Middlebury": "https://athletics.middlebury.edu/sports/womens-lacrosse/schedule/2026",
             "Salisbury": "https://suseagulls.com/sports/womens-lacrosse/schedule/2026",
             "Tufts": "https://gotuftsjumbos.com/sports/womens-lacrosse/schedule/2026",
-            "Franklin & Marshall": "https://godiplomats.com/sports/womens-lacrosse/schedule/2026",
             "William Smith": "https://hwsathletics.com/sports/womens-lacrosse/schedule/2026",
+            "Franklin & Marshall": "https://godiplomats.com/sports/womens-lacrosse/schedule/2026",
             "Gettysburg": "https://gettysburgsports.com/sports/womens-lacrosse/schedule/2026",
-            "Pomona-Pitzer": "https://sagehens.com/sports/womens-lacrosse/schedule/2026",
             "TCNJ": "https://tcnjathletics.com/sports/womens-lacrosse/schedule/2026",
+            "Pomona-Pitzer": "https://sagehens.com/sports/womens-lacrosse/schedule/2026",
             "York (PA)": "https://ycpspartans.com/sports/womens-lacrosse/schedule/2026",
-            "Colby": "https://colbyathletics.com/sports/womens-lacrosse/schedule/2026"
+            "Colby": "https://colbyathletics.com/sports/womens-lacrosse/schedule/2026",
+            "Roanoke": "https://roanokecatamounts.com/sports/womens-lacrosse/schedule/2026",
+            "Ithaca": "https://athletics.ithaca.edu/sports/womens-lacrosse/schedule/2026",
+            "Williams": "https://ephsports.williams.edu/sports/womens-lacrosse/schedule/2026",
+            "Cortland": "https://www.cortlandreddragons.com/sports/womens-lacrosse/schedule/2026",
+            "Trinity (CT)": "https://bantamsports.com/sports/womens-lacrosse/schedule/2026",
+            "Christopher Newport": "https://cnusports.com/sports/womens-lacrosse/schedule/2026",
+            "St. John Fisher": "https://athletics.sjf.edu/sports/womens-lacrosse/schedule/2026",
+            "Chicago": "https://athletics.uchicago.edu/sports/womens-lacrosse/schedule/2026",
+            "Stevens": "https://stevensducks.com/sports/womens-lacrosse/schedule/2026",
+            "MIT": "https://mitathletics.com/sports/womens-lacrosse/schedule/2026"
         },
         "D1": {
             "Northwestern": "https://nusports.com/sports/womens-lacrosse/schedule/2026",
@@ -27,28 +83,25 @@ SCHOOL_DATA = {
             "Maryland": "https://umterps.com/sports/womens-lacrosse/schedule/2026",
             "Michigan": "https://mgoblue.com/sports/womens-lacrosse/schedule/2026",
             "Notre Dame": "https://fightingirish.com/sports/wlax/schedule/",
-            "Virginia": "https://virginiasports.com/sports/womens-lacrosse/schedule/2026",
             "Florida": "https://floridagators.com/sports/womens-lacrosse/schedule/2026",
+            "Virginia": "https://virginiasports.com/sports/womens-lacrosse/schedule/2026",
+            "Loyola (MD)": "https://loyolagreyhounds.com/sports/womens-lacrosse/schedule/2026",
+            "Denver": "https://denverpioneers.com/sports/womens-lacrosse/schedule/2026",
             "James Madison": "https://jmusports.com/sports/womens-lacrosse/schedule/2026",
-            "Denver": "https://denverpioneers.com/sports/womens-lacrosse/schedule/2026"
-        }
-    },
-    "Men's Lacrosse": {
-        "D3": {
-            "Tufts": "https://gotuftsjumbos.com/sports/mens-lacrosse/schedule/2026",
-            "Salisbury": "https://suseagulls.com/sports/mens-lacrosse/schedule/2026",
-            "RIT": "https://ritathletics.com/sports/mens-lacrosse/schedule/2026",
-            "Christopher Newport": "https://cnusports.com/sports/mens-lacrosse/schedule/2026"
-        },
-        "D1": {
-            "Notre Dame": "https://fightingirish.com/sports/mlax/schedule/",
-            "Duke": "https://goduke.com/sports/mens-lacrosse/schedule/2026",
-            "Virginia": "https://virginiasports.com/sports/mens-lacrosse/schedule/2026"
+            "Penn": "https://pennathletics.com/sports/womens-lacrosse/schedule/2026",
+            "Stony Brook": "https://stonybrookathletics.com/sports/womens-lacrosse/schedule/2026",
+            "Yale": "https://yalebulldogs.com/sports/womens-lacrosse/schedule/2026",
+            "Johns Hopkins": "https://hopkinssports.com/sports/womens-lacrosse/schedule/2026",
+            "North Carolina": "https://goheels.com/sports/womens-lacrosse/schedule/text",
+            "Princeton": "https://goprincetontigers.com/sports/womens-lacrosse/schedule/2026",
+            "Navy": "https://navysports.com/sports/womens-lacrosse/schedule/2026",
+            "Stanford": "https://gostanford.com/sports/womens-lacrosse/schedule/2026",
+            "Colorado": "https://cubuffs.com/sports/womens-lacrosse/schedule/2026"
         }
     }
 }
 
-# --- SCRAPER TOOLS ---
+# --- HELPERS ---
 def extract_date_from_row(element):
     month_pattern = r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
     day_pattern = r"(\d{1,2})"
@@ -115,25 +168,28 @@ def style_df(styler):
 # --- UI ---
 st.set_page_config(page_title="LaxTracker Pro", page_icon="🥍", layout="wide")
 
-# Sidebar Controls
-st.sidebar.title("Navigation")
-league = st.sidebar.radio("League", ["Women's Lacrosse", "Men's Lacrosse"])
-div = st.sidebar.radio("Division", ["D3", "D1"]) # D3 on top
-team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[league][div].keys()))
+st.sidebar.title("🥍 LaxTracker Pro")
+league = st.sidebar.radio("Select Category", ["Men's Lacrosse", "Women's Lacrosse"])
+div = st.sidebar.radio("Select Division", ["D3", "D1"]) # D3 remains on top
+team = st.sidebar.selectbox("Select Team", sorted(list(SCHOOL_DATA[league][div].keys())))
 
-# Header
 st.markdown(f"""
     <div style="line-height: 1.1; margin-bottom: 10px;">
         <span style="font-size: 52px; font-weight: 900; color: #FFFFFF; letter-spacing: -1px;">{team}</span><br>
-        <span style="font-size: 16px; font-weight: 400; color: #888888; letter-spacing: 3px; text-transform: uppercase;">{league} {div} Dashboard</span>
+        <span style="font-size: 16px; font-weight: 400; color: #888888; letter-spacing: 3px; text-transform: uppercase;">{league} {div} Top 20 Dashboard</span>
     </div>
     """, unsafe_allow_html=True)
 
-with st.spinner("Fetching Data..."):
+with st.spinner("Fetching Live Scores..."):
     record, df = get_school_data(SCHOOL_DATA[league][div][team])
 
 if not df.empty:
     st.metric("Season Record", record)
-    st.dataframe(style_df(df.style), use_container_width=True, hide_index=True, height=(len(df) * 35) + 50)
+    st.dataframe(
+        style_df(df.style), 
+        use_container_width=True, 
+        hide_index=True, 
+        height=(len(df) * 35) + 50
+    )
 else:
-    st.error("Data unavailable for this school.")
+    st.error("Live data feed unavailable for this school. Please try another team.")
