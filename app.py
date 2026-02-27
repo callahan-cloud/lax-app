@@ -55,19 +55,24 @@ SCHOOL_DATA = {
 
 # --- TOOLS ---
 def get_team_record_robust(soup):
-    """Deep scan for team record using CSS classes and string matching."""
-    # Pattern 1: Sidearm specific classes
+    """Scan for record and strip away extra text like PCT and Conference stats."""
     targets = ['.sidearm-schedule-record', '.overall-record', '.record', '.c-schedule-header__record']
+    raw_text = ""
+    
     for selector in targets:
         found = soup.select_one(selector)
         if found:
-            return found.get_text(strip=True).replace("Overall", "").replace("Record:", "").strip()
+            raw_text = found.get_text(strip=True)
+            break
     
-    # Pattern 2: Search for text content matching "Overall: X-X"
-    rec_text = soup.find(string=re.compile(r'Overall:?\s*\d+-\d+'))
-    if rec_text:
-        match = re.search(r'\d+-\d+', rec_text)
-        if match: return match.group(0)
+    if not raw_text:
+        rec_search = soup.find(string=re.compile(r'Overall:?\s*\d+-\d+'))
+        if rec_search: raw_text = rec_search
+
+    # REGEX CLEANUP: Find exactly the "digits-digits" pattern
+    clean_match = re.search(r'(\d+-\d+)', raw_text)
+    if clean_match:
+        return clean_match.group(1)
             
     return "N/A"
 
