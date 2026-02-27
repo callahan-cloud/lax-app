@@ -151,8 +151,7 @@ def get_data(url):
         return "N/A", pd.DataFrame()
 
 def apply_styles(styler):
-    # CENTERED ALIGNMENT FOR INDEX COLUMN '#'
-    styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold; text-align: center;', subset=['#'])
+    styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold;', subset=['#'])
     styler.applymap(lambda x: 'color: #FFA500; font-weight: bold;' if x == "Away" else 'color: #999999;', subset=['Venue'])
     def color_status(val):
         if 'W' in val: return 'background-color: rgba(40, 167, 69, 0.3); color: #90EE90; font-weight: bold;'
@@ -191,7 +190,8 @@ if not df.empty:
         hide_index=True, 
         height=(len(df) * 35) + 50,
         column_config={
-            "#": st.column_config.Column(width=None),
+            # SETTING ALIGNMENT TO CENTER EXPLICITLY HERE
+            "#": st.column_config.Column(width=None, alignment="center"),
             "Date": st.column_config.Column(width=None),
             "Venue": st.column_config.Column(width=None),
             "Opponent": st.column_config.Column(width=None),
