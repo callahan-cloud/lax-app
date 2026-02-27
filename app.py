@@ -101,4 +101,41 @@ def get_school_data(url):
                     games.append({
                         "Date": date_val,
                         "Opponent": opp.get_text(strip=True).replace("Opponent:", "").strip(),
-                        "Status": res.get_text(strip=
+                        "Status": res.get_text(strip=True) if res else "Scheduled"
+                    })
+        return record, pd.DataFrame(games).drop_duplicates()
+    except:
+        return "N/A", pd.DataFrame()
+
+def color_rows(val):
+    if 'W' in val: return 'background-color: rgba(40, 167, 69, 0.3)'
+    if 'L' in val: return 'background-color: rgba(220, 53, 69, 0.3)'
+    if any(x in val.upper() for x in ['AM', 'PM', 'LIVE']): return 'background-color: rgba(255, 193, 7, 0.3)'
+    return ''
+
+# --- UI ---
+st.set_page_config(page_title="LaxScore Elite", page_icon="🥍")
+st.title("🥍 LaxScore Elite Dashboard")
+
+div = st.sidebar.radio("Division", ["D1", "D3"])
+team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[div].keys()))
+
+with st.spinner(f"Fetching {team} data..."):
+    record, df = get_school_data(SCHOOL_DATA[div][team])
+
+if not df.empty:
+    col1, col2 = st.columns(2)
+    col1.metric("Season Record", record)
+    col2.caption(f"Last Updated: {datetime.now().strftime('%I:%M %p')}")
+    
+    st.dataframe(
+        df.style.applymap(color_rows, subset=['Status']),
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.error(f"⚠️ Could not load data for {team}.")
+    st.link_button("View Official Schedule", SCHOOL_DATA[div][team])
+
+st.divider()
+st.link_button("📺 ESPN Lacrosse Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
