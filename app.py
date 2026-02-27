@@ -52,13 +52,13 @@ SCHOOL_DATA = {
 }
 
 def get_school_scores(url, school_name):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
         games = []
 
-        # 1. UNC TEXT-ONLY LOGIC (GoHeels)
+        # 1. UNC TEXT-ONLY LOGIC
         if "goheels.com" in url:
             table = soup.find('table')
             if table:
@@ -66,18 +66,17 @@ def get_school_scores(url, school_name):
                 for row in rows:
                     cols = row.find_all('td')
                     if len(cols) >= 6:
-                        # Grabs "Feb 27 (Fri)" instead of year
-                        date_str = cols[0].get_text(" ", strip=True)
-                        opp_str = cols[3].get_text(strip=True)
-                        res_str = cols[6].get_text(strip=True) if cols[6].get_text(strip=True) else "Scheduled"
-                        games.append({"Date": date_str, "Opponent": opp_str, "Result": res_str})
+                        games.append({
+                            "Date": cols[0].get_text(" ", strip=True),
+                            "Opponent": cols[3].get_text(strip=True),
+                            "Result": cols[6].get_text(strip=True) if cols[6].get_text(strip=True) else "Scheduled"
+                        })
 
-        # 2. NOTRE DAME LOGIC (WMT Digital)
+        # 2. NOTRE DAME LOGIC (WMT)
         elif "fightingirish.com" in url:
             for item in soup.select('.c-event-card'):
                 opp = item.select_one('.c-event-card__opponent')
                 res = item.select_one('.c-event-card__score')
-                # Target the inner span for the date to avoid the year/time tags
                 date_tag = item.select_one('.c-event-card__date')
                 if opp:
                     games.append({
@@ -86,22 +85,32 @@ def get_school_scores(url, school_name):
                         "Result": res.get_text(strip=True) if res else "Upcoming"
                     })
 
-        # 3. STANDARD SIDEARM LOGIC (Most other schools)
+        # 3. D3 / SIDEARM SPORTS FIX (The "Deeper Dive")
         else:
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
                 res = item.select_one('.sidearm-schedule-game-result')
                 
-                # We specifically look for the "upcoming-date" or "date" span
-                # often hidden inside .sidearm-schedule-game-details
-                date_el = item.select_one('.sidearm-schedule-game-upcoming-date, .sidearm-schedule-game-date')
+                # REVISED DATE LOGIC:
+                # First try: Look for the specific date container
+                date_el = item.select_one('.sidearm-schedule-game-upcoming-date')
+                if not date_el:
+                    date_el = item.select_one('.sidearm-schedule-game-date')
                 
+                # Second try: Fallback to the aria-label which almost always contains "Feb 27"
+                if date_el:
+                    # Some sites hide Month/Day in a sub-span
+                    clean_date = date_el.get_text(" ", strip=True)
+                    # If it's just the year, try the aria-label
+                    if clean_date == "2026" and item.has_attr('aria-label'):
+                        clean_date = item['aria-label'].split(" on ")[-1].split(" at ")[0]
+                else:
+                    clean_date = "TBD"
+
                 if opp:
-                    # Clean the date text to remove excessive spacing/newlines
-                    clean_date = " ".join(date_el.get_text().split()) if date_el else "TBD"
                     games.append({
                         "Date": clean_date,
-                        "Opponent": opp.get_text(strip=True), 
+                        "Opponent": opp.get_text(strip=True).replace('Opponent:', '').strip(), 
                         "Result": res.get_text(strip=True) if res else "Upcoming"
                     })
         
@@ -123,11 +132,11 @@ with tab1:
     st.subheader(f"{target_team} Schedule")
     df = get_school_scores(url, target_team)
     if not df.empty:
-        # We use st.dataframe here as it handles long text better on mobile
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        # Using a table format for better readability on D3 dates
+        st.table(df)
     else:
-        st.warning("Could not sync live dates. Check the official site below:")
-        st.link_button(f"🔗 View {target_team} Schedule", url)
+        st.error("Live sync unavailable. The site may be blocking requests.")
+        st.link_button(f"🔗 View {target_team} Official Schedule", url)
 
 with tab2:
     st.link_button("📺 Open ESPN Lacrosse Scoreboard", 
