@@ -77,49 +77,64 @@ def get_school_data(url):
         record = get_team_record_robust(soup)
         games = []
 
+        # Scraper logic remains consistent, but we extract '@' presence
         if "goheels.com" in url:
             table = soup.find('table')
             if table:
                 for row in table.find_all('tr')[1:]:
                     cols = row.find_all('td')
                     if len(cols) >= 6:
-                        games.append({"Date": cols[0].get_text(strip=True), "Opponent": cols[3].get_text(strip=True), "Status": cols[6].get_text(strip=True) or "Scheduled"})
+                        opp = cols[3].get_text(strip=True)
+                        games.append({"Date": cols[0].get_text(strip=True), "Opponent": opp, "Status": cols[6].get_text(strip=True) or "Scheduled"})
         elif "fightingirish.com" in url:
             for item in soup.select('.c-event-card'):
                 opp_tag = item.select_one('.c-event-card__opponent')
                 res_tag = item.select_one('.c-event-card__score')
                 date_tag = item.select_one('.c-event-card__date')
+                loc_tag = item.select_one('.c-event-card__location') # WMT specific loc
                 if opp_tag:
-                    games.append({
-                        "Date": date_tag.get_text(strip=True) if date_tag else "TBD",
-                        "Opponent": opp_tag.get_text(strip=True),
-                        "Status": res_tag.get_text(strip=True) if res_tag else "Upcoming"
-                    })
+                    venue = "Away" if (loc_tag and "at " in loc_tag.text.lower()) else "Home"
+                    games.append({"Date": date_tag.get_text(strip=True) if date_tag else "TBD", "Opponent": opp_tag.get_text(strip=True), "Status": res_tag.get_text(strip=True) if res_tag else "Upcoming", "Venue": venue})
         else:
             for item in soup.select('.sidearm-schedule-game'):
-                opp = item.select_one('.sidearm-schedule-game-opponent-name')
-                res = item.select_one('.sidearm-schedule-game-result')
+                opp_el = item.select_one('.sidearm-schedule-game-opponent-name')
+                res_el = item.select_one('.sidearm-schedule-game-result')
                 date_container = item.select_one('.sidearm-schedule-game-date, .sidearm-schedule-game-upcoming-date')
-                date_val = "TBD"
-                if date_container:
-                    parts = [s.get_text(strip=True) for s in date_container.find_all(True) if s.get_text(strip=True) != "2026"]
-                    date_val = " ".join(parts) if parts else date_container.get_text(" ", strip=True).replace("2026", "").strip()
-                if opp:
-                    games.append({"Date": date_val, "Opponent": opp.get_text(strip=True).replace("Opponent:", "").strip(), "Status": res.get_text(strip=True) if res else "Scheduled"})
+                
+                if opp_el:
+                    raw_opp = opp_el.get_text(strip=True).replace("Opponent:", "").strip()
+                    # Detect venue by looking for '@'
+                    venue = "Away" if "@" in raw_opp else "Home"
+                    clean_opp = raw_opp.replace("@", "").strip()
+                    
+                    date_val = "TBD"
+                    if date_container:
+                        parts = [s.get_text(strip=True) for s in date_container.find_all(True) if s.get_text(strip=True) != "2026"]
+                        date_val = " ".join(parts) if parts else date_container.get_text(" ", strip=True).replace("2026", "").strip()
+                    
+                    games.append({"Date": date_val, "Opponent": clean_opp, "Status": res_el.get_text(strip=True) if res_el else "Scheduled", "Venue": venue})
         
         final_df = pd.DataFrame(games).drop_duplicates()
         if not final_df.empty:
-            final_df.insert(0, "Game #", range(1, len(final_df) + 1))
-            final_df["Game #"] = final_df["Game #"].apply(lambda x: f"Game {x}")
+            # Handle Venue for sites that don't use @ (like UNC)
+            if 'Venue' not in final_df.columns:
+                final_df['Venue'] = final_df['Opponent'].apply(lambda x: "Away" if "@" in x else "Home")
+                final_df['Opponent'] = final_df['Opponent'].str.replace("@", "").strip()
+            
+            final_df.insert(0, "#", range(1, len(final_df) + 1))
+            # Reorder for better flow
+            final_df = final_df[['#', 'Date', 'Venue', 'Opponent', 'Status']]
+            
         return record, final_df
     except:
         return "N/A", pd.DataFrame()
 
 def style_df(styler):
-    # Style for Game # column
-    styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold;', subset=['Game #'])
+    styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold; text-align: center;', subset=['#'])
     
-    # Style for Status column
+    # Venue Style
+    styler.applymap(lambda x: 'color: #FFA500;' if x == "Away" else 'color: #BBBBBB;', subset=['Venue'])
+    
     def color_status(val):
         if 'W' in val: return 'background-color: rgba(40, 167, 69, 0.3); color: #90EE90; font-weight: bold;'
         if 'L' in val: return 'background-color: rgba(220, 53, 69, 0.3); color: #FFB6C1;'
@@ -150,13 +165,11 @@ if not df.empty:
     c1.metric(f"Record", record)
     c2.caption(f"Synced at {datetime.now().strftime('%I:%M %p')}")
     
-    dynamic_height = (len(df) * 35) + 50
-    
     st.dataframe(
         style_df(df.style),
         use_container_width=True,
         hide_index=True,
-        height=dynamic_height
+        height=(len(df) * 35) + 50
     )
 else:
     st.error("Data unavailable.")
