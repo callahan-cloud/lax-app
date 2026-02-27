@@ -136,8 +136,8 @@ def color_rows(val):
     return ''
 
 # --- UI ---
-st.set_page_config(page_title="LaxTracker Pro", page_icon="🥍", layout="wide")
-st.title("🥍 LaxTracker Elite Dashboard")
+st.set_page_config(page_title="Callax Scores", page_icon="🥍", layout="wide")
+st.title("🥍 Callax Dashboard")
 
 div = st.sidebar.radio("Division", ["D1", "D3"])
 team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[div].keys()))
@@ -161,3 +161,4 @@ else:
 
 st.divider()
 st.link_button("📺 Open ESPN Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
+
