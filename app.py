@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-# --- FULL TOP 20 DIRECTORY (FEB 2026) ---
+# --- FULL TOP 20 DIRECTORY ---
 SCHOOL_DATA = {
     "D1": {
         "Notre Dame": "https://fightingirish.com/sports/mlax/schedule/",
@@ -52,61 +52,65 @@ SCHOOL_DATA = {
 }
 
 def get_school_scores(url, school_name):
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
         games = []
 
-        # 1. UNC TEXT-ONLY LOGIC
-        if "goheels.com" in url and "/text" in url:
+        # 1. UNC TEXT-ONLY LOGIC (GoHeels)
+        if "goheels.com" in url:
             table = soup.find('table')
             if table:
-                rows = table.find_all('tr')[1:] # Skip header
+                rows = table.find_all('tr')[1:] 
                 for row in rows:
                     cols = row.find_all('td')
                     if len(cols) >= 6:
-                        # Grabbing "Feb 27 (Fri)" format or similar
-                        date_val = cols[0].text.strip()
-                        opp_val = cols[3].text.strip()
-                        res_val = cols[6].text.strip() if cols[6].text.strip() else "Scheduled"
-                        games.append({"Date": date_val, "Opponent": opp_val, "Result": res_val})
+                        # Grabs "Feb 27 (Fri)" instead of year
+                        date_str = cols[0].get_text(" ", strip=True)
+                        opp_str = cols[3].get_text(strip=True)
+                        res_str = cols[6].get_text(strip=True) if cols[6].get_text(strip=True) else "Scheduled"
+                        games.append({"Date": date_str, "Opponent": opp_str, "Result": res_str})
 
-        # 2. NOTRE DAME LOGIC (WMT)
+        # 2. NOTRE DAME LOGIC (WMT Digital)
         elif "fightingirish.com" in url:
             for item in soup.select('.c-event-card'):
                 opp = item.select_one('.c-event-card__opponent')
                 res = item.select_one('.c-event-card__score')
-                date = item.select_one('.c-event-card__date')
+                # Target the inner span for the date to avoid the year/time tags
+                date_tag = item.select_one('.c-event-card__date')
                 if opp:
                     games.append({
-                        "Date": date.text.strip() if date else "TBD",
-                        "Opponent": opp.text.strip(), 
-                        "Result": res.text.strip() if res else "Upcoming"
+                        "Date": date_tag.get_text(strip=True) if date_tag else "TBD",
+                        "Opponent": opp.get_text(strip=True), 
+                        "Result": res.get_text(strip=True) if res else "Upcoming"
                     })
 
-        # 3. STANDARD SIDEARM LOGIC
+        # 3. STANDARD SIDEARM LOGIC (Most other schools)
         else:
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
                 res = item.select_one('.sidearm-schedule-game-result')
-                # Target specifically the 'upcoming-date' or 'date' span
-                date_span = item.select_one('.sidearm-schedule-game-upcoming-date, .sidearm-schedule-game-date')
+                
+                # We specifically look for the "upcoming-date" or "date" span
+                # often hidden inside .sidearm-schedule-game-details
+                date_el = item.select_one('.sidearm-schedule-game-upcoming-date, .sidearm-schedule-game-date')
                 
                 if opp:
-                    date_val = date_span.text.strip() if date_span else "TBD"
+                    # Clean the date text to remove excessive spacing/newlines
+                    clean_date = " ".join(date_el.get_text().split()) if date_el else "TBD"
                     games.append({
-                        "Date": date_val,
-                        "Opponent": opp.text.strip(), 
-                        "Result": res.text.strip() if res else "Upcoming"
+                        "Date": clean_date,
+                        "Opponent": opp.get_text(strip=True), 
+                        "Result": res.get_text(strip=True) if res else "Upcoming"
                     })
         
         return pd.DataFrame(games).drop_duplicates()
-    except Exception as e:
+    except:
         return pd.DataFrame()
 
 # --- UI ---
-st.set_page_config(page_title="LaxTracker Pro", layout="centered", page_icon="🥍")
+st.set_page_config(page_title="LaxTracker Pro", layout="wide", page_icon="🥍")
 st.title("🥍 Official Top 20 Tracker")
 
 div_choice = st.sidebar.radio("Select Division", ["D1", "D3"])
@@ -116,21 +120,16 @@ tab1, tab2 = st.tabs(["📅 Live Schedule", "📺 ESPN Scoreboard"])
 
 with tab1:
     url = SCHOOL_DATA[div_choice][target_team]
-    st.subheader(f"{target_team} Results")
-    with st.spinner("Syncing with school athletics..."):
-        df = get_school_scores(url, target_team)
-        if not df.empty:
-            # Displaying the Month/Day Date clearly
-            st.table(df)
-        else:
-            st.error("Live sync unavailable for this school.")
-            st.link_button(f"🔗 View {target_team} Official Schedule", url)
+    st.subheader(f"{target_team} Schedule")
+    df = get_school_scores(url, target_team)
+    if not df.empty:
+        # We use st.dataframe here as it handles long text better on mobile
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Could not sync live dates. Check the official site below:")
+        st.link_button(f"🔗 View {target_team} Schedule", url)
 
 with tab2:
-    st.info("Direct link to today's NCAA Men's Lacrosse scoreboard.")
     st.link_button("📺 Open ESPN Lacrosse Scoreboard", 
                    "https://www.espn.com/mens-college-lacrosse/scoreboard", 
                    use_container_width=True, type="primary")
-
-st.sidebar.markdown("---")
-st.sidebar.caption("Data: Direct from school athletic departments.")
