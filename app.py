@@ -184,18 +184,18 @@ with st.spinner(f"Updating..."):
 if not df.empty:
     st.metric("Season Record", record)
     
-    # --- AUTO-FIT COLUMN CONFIGURATION ---
+    # --- TRUE AUTO-FIT CONFIGURATION ---
     st.dataframe(
         apply_styles(df.style), 
         use_container_width=True, 
         hide_index=True, 
         height=(len(df) * 35) + 50,
         column_config={
-            "#": st.column_config.Column(width="small"),
-            "Date": st.column_config.Column(width="small"),
-            "Venue": st.column_config.Column(width="small"),
-            "Opponent": st.column_config.Column(width="large"), # Takes up the remaining space
-            "Status": st.column_config.Column(width="medium")
+            "#": st.column_config.Column(width=None),
+            "Date": st.column_config.Column(width=None),
+            "Venue": st.column_config.Column(width=None),
+            "Opponent": st.column_config.Column(width=None), # Auto-fits to text length
+            "Status": st.column_config.Column(width=None)
         }
     )
 else:
