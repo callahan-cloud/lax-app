@@ -52,58 +52,80 @@ SCHOOL_DATA = {
 }
 
 def get_school_scores(url, school_name):
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"}
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
         games = []
 
-        # 1. NOTRE DAME LOGIC (WMT)
-        if "fightingirish.com" in url:
+        # 1. UNC TEXT-ONLY LOGIC (Targeted for the tabular /text layout)
+        if "goheels.com" in url and "/text" in url:
+            table = soup.find('table')
+            if table:
+                rows = table.find_all('tr')[1:] # Skip header
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) >= 6:
+                        date = cols[0].text.strip()
+                        opponent = cols[3].text.strip() # The "Opponent" column
+                        result = cols[6].text.strip() if cols[6].text.strip() else "Scheduled"
+                        games.append({"Date": date, "Opponent": opponent, "Result": result})
+
+        # 2. NOTRE DAME LOGIC (WMT)
+        elif "fightingirish.com" in url:
             for item in soup.select('.c-event-card'):
                 opp = item.select_one('.c-event-card__opponent')
                 res = item.select_one('.c-event-card__score')
+                date = item.select_one('.c-event-card__date')
                 if opp:
-                    games.append({"Opponent": opp.text.strip(), "Result": res.text.strip() if res else "Upcoming"})
-        
-        # 2. UNC TEXT-ONLY LOGIC
-        elif "/text" in url:
-            rows = soup.find_all('tr')
-            for row in rows:
-                cols = row.find_all('td')
-                if len(cols) >= 3:
-                    games.append({"Opponent": cols[2].text.strip(), "Result": cols[-1].text.strip()})
+                    games.append({
+                        "Date": date.text.strip() if date else "TBD",
+                        "Opponent": opp.text.strip(), 
+                        "Result": res.text.strip() if res else "Upcoming"
+                    })
 
-        # 3. STANDARD SIDEARM LOGIC (Used by ~90% of schools)
+        # 3. STANDARD SIDEARM LOGIC
         else:
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
                 res = item.select_one('.sidearm-schedule-game-result')
+                date = item.select_one('.sidearm-schedule-game-upcoming-date')
                 if opp:
-                    games.append({"Opponent": opp.text.strip(), "Result": res.text.strip() if res else "Upcoming"})
+                    games.append({
+                        "Date": date.text.strip() if date else "2026",
+                        "Opponent": opp.text.strip(), 
+                        "Result": res.text.strip() if res else "Upcoming"
+                    })
         
         return pd.DataFrame(games).drop_duplicates()
-    except:
+    except Exception as e:
         return pd.DataFrame()
 
 # --- UI ---
-st.set_page_config(page_title="LaxTracker Top 20", layout="centered")
+st.set_page_config(page_title="LaxTracker Pro", layout="centered", page_icon="🥍")
 st.title("🥍 Official Top 20 Tracker")
 
 div_choice = st.sidebar.radio("Select Division", ["D1", "D3"])
 target_team = st.sidebar.selectbox("Choose Team", list(SCHOOL_DATA[div_choice].keys()))
 
-tab1, tab2 = st.tabs(["📅 Live Schedule", "📺 Watch on ESPN+"])
+tab1, tab2 = st.tabs(["📅 Live Schedule", "📺 ESPN Scoreboard"])
 
 with tab1:
     url = SCHOOL_DATA[div_choice][target_team]
     st.subheader(f"{target_team} Results")
-    df = get_school_scores(url, target_team)
-    if not df.empty:
-        st.table(df)
-    else:
-        st.error("Site structure changed. Use the link below:")
-        st.link_button(f"🔗 View {target_team} Schedule", url)
+    with st.spinner("Syncing with school athletics..."):
+        df = get_school_scores(url, target_team)
+        if not df.empty:
+            st.table(df)
+        else:
+            st.error("Live sync unavailable for this school.")
+            st.link_button(f"🔗 View {target_team} Schedule", url)
 
 with tab2:
-    st.link_button("📺 Open ESPN+ Lacrosse Hub", "https://plus.espn.com/", use_container_width=True)
+    st.info("Direct link to today's NCAA Men's Lacrosse scoreboard.")
+    st.link_button("📺 Open ESPN Lacrosse Scoreboard", 
+                   "https://www.espn.com/mens-college-lacrosse/scoreboard", 
+                   use_container_width=True, type="primary")
+
+st.sidebar.markdown("---")
+st.sidebar.caption("Data: Direct from school athletic departments.")
