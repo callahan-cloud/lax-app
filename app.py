@@ -124,4 +124,13 @@ with tab1:
             st.table(df)
         else:
             st.error("Live sync unavailable for this school.")
-            st.link_button(f"🔗 View {target_team
+            st.link_button(f"🔗 View {target_team} Official Schedule", url)
+
+with tab2:
+    st.info("Direct link to today's NCAA Men's Lacrosse scoreboard.")
+    st.link_button("📺 Open ESPN Lacrosse Scoreboard", 
+                   "https://www.espn.com/mens-college-lacrosse/scoreboard", 
+                   use_container_width=True, type="primary")
+
+st.sidebar.markdown("---")
+st.sidebar.caption("Data: Direct from school athletic departments.")
