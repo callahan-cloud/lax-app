@@ -95,9 +95,10 @@ with tab1:
             st.error("This school's site format is unique or blocked. Check 'Watch Live' for scores.")
 
 with tab2:
-    st.link_button("📺 Open ESPN+ Lacrosse Hub", 
-                   "https://www.espn.com/watch/catalog/7783307b-8c43-34e4-96d5-a8c62c99c758/lacrosse",
+    st.link_button("📺 Open ESPN+ Lacrosse Scoreboard", 
+                   "https://www.espn.com/mens-college-lacrosse/scoreboard",
                    use_container_width=True, type="primary")
 
 st.sidebar.markdown("---")
 st.sidebar.caption("Data pulled directly from school athletic departments.")
+
