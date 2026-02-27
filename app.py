@@ -58,7 +58,7 @@ def get_school_scores(url, school_name):
         soup = BeautifulSoup(resp.text, 'html.parser')
         games = []
 
-        # 1. UNC TEXT-ONLY LOGIC (Targeted for the tabular /text layout)
+        # 1. UNC TEXT-ONLY LOGIC
         if "goheels.com" in url and "/text" in url:
             table = soup.find('table')
             if table:
@@ -66,10 +66,11 @@ def get_school_scores(url, school_name):
                 for row in rows:
                     cols = row.find_all('td')
                     if len(cols) >= 6:
-                        date = cols[0].text.strip()
-                        opponent = cols[3].text.strip() # The "Opponent" column
-                        result = cols[6].text.strip() if cols[6].text.strip() else "Scheduled"
-                        games.append({"Date": date, "Opponent": opponent, "Result": result})
+                        # Grabbing "Feb 27 (Fri)" format or similar
+                        date_val = cols[0].text.strip()
+                        opp_val = cols[3].text.strip()
+                        res_val = cols[6].text.strip() if cols[6].text.strip() else "Scheduled"
+                        games.append({"Date": date_val, "Opponent": opp_val, "Result": res_val})
 
         # 2. NOTRE DAME LOGIC (WMT)
         elif "fightingirish.com" in url:
@@ -89,10 +90,13 @@ def get_school_scores(url, school_name):
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
                 res = item.select_one('.sidearm-schedule-game-result')
-                date = item.select_one('.sidearm-schedule-game-upcoming-date')
+                # Target specifically the 'upcoming-date' or 'date' span
+                date_span = item.select_one('.sidearm-schedule-game-upcoming-date, .sidearm-schedule-game-date')
+                
                 if opp:
+                    date_val = date_span.text.strip() if date_span else "TBD"
                     games.append({
-                        "Date": date.text.strip() if date else "2026",
+                        "Date": date_val,
                         "Opponent": opp.text.strip(), 
                         "Result": res.text.strip() if res else "Upcoming"
                     })
@@ -116,16 +120,8 @@ with tab1:
     with st.spinner("Syncing with school athletics..."):
         df = get_school_scores(url, target_team)
         if not df.empty:
+            # Displaying the Month/Day Date clearly
             st.table(df)
         else:
             st.error("Live sync unavailable for this school.")
-            st.link_button(f"🔗 View {target_team} Schedule", url)
-
-with tab2:
-    st.info("Direct link to today's NCAA Men's Lacrosse scoreboard.")
-    st.link_button("📺 Open ESPN Lacrosse Scoreboard", 
-                   "https://www.espn.com/mens-college-lacrosse/scoreboard", 
-                   use_container_width=True, type="primary")
-
-st.sidebar.markdown("---")
-st.sidebar.caption("Data: Direct from school athletic departments.")
+            st.link_button(f"🔗 View {target_team
