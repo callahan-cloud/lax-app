@@ -101,7 +101,7 @@ SCHOOL_DATA = {
     }
 }
 
-# --- TOOLKIT (UNCHANGED) ---
+# --- TOOLKIT ---
 def extract_date(element):
     month_pattern = r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
     day_pattern = r"(\d{1,2})"
@@ -161,13 +161,14 @@ def apply_styles(styler):
     return styler
 
 # --- UI ---
-st.set_page_config(page_title="LaxTracker 2026 Pro", page_icon="🥍", layout="wide")
+# UPDATED PAGE TITLE
+st.set_page_config(page_title="simple lax tracker", page_icon="🥍", layout="wide")
 
-st.sidebar.title("🥍 LaxTracker Pro")
+# UPDATED SIDEBAR TITLE
+st.sidebar.title("🥍 simple lax tracker")
 league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
 div = st.sidebar.radio("Division", ["D3", "D1"])
 
-# Pull teams in dictionary order (Ranking Order)
 team_options = list(SCHOOL_DATA[league][div].keys())
 team = st.sidebar.selectbox("Select Team (Ranked)", team_options)
 team_url = SCHOOL_DATA[league][div][team]
@@ -175,7 +176,7 @@ team_url = SCHOOL_DATA[league][div][team]
 st.markdown(f"""
     <div style="line-height: 1.1; margin-bottom: 10px;">
         <span style="font-size: 52px; font-weight: 900; color: #FFFFFF; letter-spacing: -1px;">{team}</span><br>
-        <span style="font-size: 16px; font-weight: 400; color: #888888; letter-spacing: 3px; text-transform: uppercase;">{league} {div} Top 20 Dashboard</span>
+        <span style="font-size: 16px; font-weight: 400; color: #888888; letter-spacing: 3px; text-transform: uppercase;">{league} {div} Dashboard</span>
     </div>
     """, unsafe_allow_html=True)
 
