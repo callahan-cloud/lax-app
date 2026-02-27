@@ -151,7 +151,8 @@ def get_data(url):
         return "N/A", pd.DataFrame()
 
 def apply_styles(styler):
-    styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold;', subset=['#'])
+    # Center alignment handled by 'text-align: center;' in the style map
+    styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold; text-align: center;', subset=['#'])
     styler.applymap(lambda x: 'color: #FFA500; font-weight: bold;' if x == "Away" else 'color: #999999;', subset=['Venue'])
     def color_status(val):
         if 'W' in val: return 'background-color: rgba(40, 167, 69, 0.3); color: #90EE90; font-weight: bold;'
@@ -184,24 +185,12 @@ with st.spinner(f"Updating..."):
 if not df.empty:
     st.metric("Season Record", record)
     
+    # We remove 'alignment' and complex configs here and let 'apply_styles' do the work
     st.dataframe(
         apply_styles(df.style), 
         use_container_width=True, 
         hide_index=True, 
-        height=(len(df) * 35) + 50,
-        column_config={
-            # Correction: Use NumberColumn to allow explicit center alignment
-            "#": st.column_config.NumberColumn(
-                label="#",
-                format="%d",
-                width=None, 
-                alignment="center"
-            ),
-            "Date": st.column_config.Column(width=None),
-            "Venue": st.column_config.Column(width=None),
-            "Opponent": st.column_config.Column(width=None),
-            "Status": st.column_config.Column(width=None)
-        }
+        height=(len(df) * 35) + 50
     )
 else:
     st.warning(f"Live data for {team} is currently offline.")
