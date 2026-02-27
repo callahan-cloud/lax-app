@@ -119,33 +119,35 @@ def color_rows(val):
 # --- UI ---
 st.set_page_config(page_title="LaxTracker Pro", page_icon="🥍", layout="wide")
 
-# Sidebar
 div = st.sidebar.radio("Division", ["D1", "D3"])
 team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[div].keys()))
 
-# Themed Header
 st.markdown(f"""
-    <div style="line-height: 1.1; margin-bottom: 20px;">
-        <span style="font-size: 48px; font-weight: 800; color: #FFFFFF;">{team}</span><br>
-        <span style="font-size: 16px; font-weight: 400; color: #888888; letter-spacing: 2px; text-transform: uppercase;">Official Team Dashboard</span>
+    <div style="line-height: 1.1; margin-bottom: 10px;">
+        <span style="font-size: 52px; font-weight: 900; color: #FFFFFF; letter-spacing: -1px;">{team}</span><br>
+        <span style="font-size: 16px; font-weight: 400; color: #888888; letter-spacing: 3px; text-transform: uppercase;">Team Dashboard</span>
     </div>
     """, unsafe_allow_html=True)
 
-with st.spinner(f"Pulling {team} stats..."):
+with st.spinner(f"Updating..."):
     record, df = get_school_data(SCHOOL_DATA[div][team])
 
 if not df.empty:
     c1, c2 = st.columns([1, 1])
-    c1.metric(f"Current Record", record)
-    c2.caption(f"Last Sync: {datetime.now().strftime('%I:%M %p')}")
+    c1.metric(f"Record", record)
+    c2.caption(f"Synced at {datetime.now().strftime('%I:%M %p')}")
+    
+    # CALCULATE TABLE HEIGHT: (~35px per row + 40px for header)
+    dynamic_height = (len(df) * 35) + 40
     
     st.dataframe(
         df.style.applymap(color_rows, subset=['Status']),
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        height=dynamic_height
     )
 else:
-    st.error("No schedule data found for this selection.")
+    st.error("Data unavailable.")
 
 st.divider()
-st.link_button("📺 Open ESPN Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
+st.link_button("📺 ESPN Lacrosse Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
