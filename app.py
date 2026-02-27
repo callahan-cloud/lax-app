@@ -161,10 +161,8 @@ def apply_styles(styler):
     return styler
 
 # --- UI ---
-# UPDATED PAGE TITLE
 st.set_page_config(page_title="simple lax tracker", page_icon="🥍", layout="wide")
 
-# UPDATED SIDEBAR TITLE
 st.sidebar.title("🥍 simple lax tracker")
 league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
 div = st.sidebar.radio("Division", ["D3", "D1"])
@@ -176,16 +174,30 @@ team_url = SCHOOL_DATA[league][div][team]
 st.markdown(f"""
     <div style="line-height: 1.1; margin-bottom: 10px;">
         <span style="font-size: 52px; font-weight: 900; color: #FFFFFF; letter-spacing: -1px;">{team}</span><br>
-        <span style="font-size: 16px; font-weight: 400; color: #888888; letter-spacing: 3px; text-transform: uppercase;">{league} {div} Dashboard</span>
+        <span style="font-size: 14px; font-weight: 400; color: #888888; letter-spacing: 2px; text-transform: uppercase;">{league} {div} Dashboard</span>
     </div>
     """, unsafe_allow_html=True)
 
-with st.spinner(f"Pulling Live Data for {team}..."):
+with st.spinner(f"Updating..."):
     record, df = get_data(team_url)
 
 if not df.empty:
     st.metric("Season Record", record)
-    st.dataframe(apply_styles(df.style), use_container_width=True, hide_index=True, height=(len(df) * 35) + 50)
+    
+    # --- AUTO-FIT COLUMN CONFIGURATION ---
+    st.dataframe(
+        apply_styles(df.style), 
+        use_container_width=True, 
+        hide_index=True, 
+        height=(len(df) * 35) + 50,
+        column_config={
+            "#": st.column_config.Column(width="small"),
+            "Date": st.column_config.Column(width="small"),
+            "Venue": st.column_config.Column(width="small"),
+            "Opponent": st.column_config.Column(width="large"), # Takes up the remaining space
+            "Status": st.column_config.Column(width="medium")
+        }
+    )
 else:
     st.warning(f"Live data for {team} is currently offline.")
     st.link_button(f"🔗 View {team} Official Schedule", team_url, use_container_width=True)
