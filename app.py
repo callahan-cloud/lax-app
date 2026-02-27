@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
-from datetime import datetime
+from datetime import datetime  # This line stays in the code!
 
 # --- TOP 20 DIRECTORY ---
 SCHOOL_DATA = {
@@ -151,3 +151,4 @@ else:
 
 st.divider()
 st.link_button("📺 ESPN Lacrosse Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
+
