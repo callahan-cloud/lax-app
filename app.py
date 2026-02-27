@@ -53,6 +53,27 @@ SCHOOL_DATA = {
     }
 }
 
+# --- TOOLS ---
+def get_team_record_robust(soup):
+    """Deep scan for team record using known platform patterns."""
+    # 1. Look for Sidearm 'overall-record' class
+    rec_el = soup.select_one('.sidearm-schedule-record, .record, .overall-record')
+    if rec_el:
+        return rec_el.get_text(strip=True).replace("Overall", "").replace("Record:", "").strip()
+    
+    # 2. Look for Notre Dame / WMT pattern
+    wmt_rec = soup.select_one('.c-schedule-header__record')
+    if wmt_rec:
+        return wmt_rec.get_text(strip=True)
+
+    # 3. Regex search for W-L pattern in common header spots
+    for span in soup.find_all(['span', 'div', 'li']):
+        text = span.get_text(strip=True)
+        if re.search(r'^\d+-\d+$', text) and any(k in span.parent.text for k in ["Record", "Overall"]):
+            return text
+            
+    return "N/A"
+
 def get_school_data(url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
@@ -60,15 +81,11 @@ def get_school_data(url):
         if resp.status_code != 200: return "N/A", pd.DataFrame()
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # Record Hunt
-        record = "Record: N/A"
-        rec_tags = soup.find_all(string=re.compile(r'\d+-\d+'))
-        for r in rec_tags:
-            if any(key in r.parent.text for key in ["Overall", "Record", "W-L"]):
-                record = r.strip()
-                break
+        # New robust record hunting
+        record = get_team_record_robust(soup)
 
         games = []
+        # SCRAPER LOGIC
         if "goheels.com" in url:
             table = soup.find('table')
             if table:
@@ -91,59 +108,13 @@ def get_school_data(url):
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
                 res = item.select_one('.sidearm-schedule-game-result')
-                # NEW RECURSIVE DATE GRAB
                 date_container = item.select_one('.sidearm-schedule-game-date, .sidearm-schedule-game-upcoming-date')
+                
                 date_val = "TBD"
                 if date_container:
-                    # Collects all text parts (Month, Day) and filters out the Year
-                    parts = [s.get_text(strip=True) for s in date_container.find_all(True)]
-                    date_val = " ".join([p for p in parts if p and p != "2026"])
-                
-                # Fallback to Aria-Label if container failed
-                if not date_val or date_val == "TBD":
-                    label = item.get('aria-label', '')
-                    match = re.search(r'[A-Z][a-z]{2}\s\d{1,2}', label)
-                    if match: date_val = match.group(0)
+                    parts = [s.get_text(strip=True) for s in date_container.find_all(True) if s.get_text(strip=True) != "2026"]
+                    date_val = " ".join(parts) if parts else date_container.get_text(" ", strip=True).replace("2026", "").strip()
 
                 if opp:
                     games.append({
-                        "Date": date_val,
-                        "Opponent": opp.get_text(strip=True).replace("Opponent:", "").strip(),
-                        "Status": res.get_text(strip=True) if res else "Scheduled"
-                    })
-        return record, pd.DataFrame(games).drop_duplicates()
-    except:
-        return "N/A", pd.DataFrame()
-
-def color_rows(val):
-    if 'W' in val: return 'background-color: rgba(40, 167, 69, 0.3)'
-    if 'L' in val: return 'background-color: rgba(220, 53, 69, 0.3)'
-    if any(x in val.upper() for x in ['AM', 'PM', 'LIVE']): return 'background-color: rgba(255, 193, 7, 0.3)'
-    return ''
-
-# --- UI ---
-st.set_page_config(page_title="LaxScore Elite", page_icon="🥍")
-st.title("🥍 LaxScore Elite Dashboard")
-
-div = st.sidebar.radio("Division", ["D1", "D3"])
-team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[div].keys()))
-
-with st.spinner(f"Fetching {team} data..."):
-    record, df = get_school_data(SCHOOL_DATA[div][team])
-
-if not df.empty:
-    col1, col2 = st.columns(2)
-    col1.metric("Season Record", record)
-    col2.caption(f"Last Updated: {datetime.now().strftime('%I:%M %p')}")
-    
-    st.dataframe(
-        df.style.applymap(color_rows, subset=['Status']),
-        use_container_width=True,
-        hide_index=True
-    )
-else:
-    st.error(f"⚠️ Could not load data for {team}.")
-    st.link_button("View Official Schedule", SCHOOL_DATA[div][team])
-
-st.divider()
-st.link_button("📺 ESPN Lacrosse Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
+                        "Date": date
