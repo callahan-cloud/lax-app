@@ -143,15 +143,17 @@ def get_data(url):
                     venue = "Away" if is_away else "Home"
                     clean_opp = raw_opp.replace("@", "").replace("at ", "").strip()
                     games.append({"Date": extract_date(item), "Venue": venue, "Opponent": clean_opp, "Status": res_el.get_text(strip=True) if res_el else "Scheduled"})
+        
         df = pd.DataFrame(games).drop_duplicates()
         if not df.empty:
-            df.insert(0, "#", range(1, len(df) + 1))
+            # IMPORTANT: We convert range to list of strings to force alignment later
+            df.insert(0, "#", [str(i) for i in range(1, len(df) + 1)])
         return record, df
     except:
         return "N/A", pd.DataFrame()
 
 def apply_styles(styler):
-    # Center alignment handled by 'text-align: center;' in the style map
+    # Now that '#' is a string, text-align center should take full effect
     styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold; text-align: center;', subset=['#'])
     styler.applymap(lambda x: 'color: #FFA500; font-weight: bold;' if x == "Away" else 'color: #999999;', subset=['Venue'])
     def color_status(val):
@@ -185,7 +187,8 @@ with st.spinner(f"Updating..."):
 if not df.empty:
     st.metric("Season Record", record)
     
-    # We remove 'alignment' and complex configs here and let 'apply_styles' do the work
+    # We display it as-is. Since '#' is now text, it defaults to left-aligned, 
+    # but our CSS 'text-align: center' will move it to the middle.
     st.dataframe(
         apply_styles(df.style), 
         use_container_width=True, 
