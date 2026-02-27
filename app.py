@@ -151,6 +151,7 @@ def get_data(url):
         return "N/A", pd.DataFrame()
 
 def apply_styles(styler):
+    # CENTERED ALIGNMENT FOR INDEX COLUMN '#'
     styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold; text-align: center;', subset=['#'])
     styler.applymap(lambda x: 'color: #FFA500; font-weight: bold;' if x == "Away" else 'color: #999999;', subset=['Venue'])
     def color_status(val):
@@ -184,7 +185,6 @@ with st.spinner(f"Updating..."):
 if not df.empty:
     st.metric("Season Record", record)
     
-    # --- TRUE AUTO-FIT CONFIGURATION ---
     st.dataframe(
         apply_styles(df.style), 
         use_container_width=True, 
@@ -194,7 +194,7 @@ if not df.empty:
             "#": st.column_config.Column(width=None),
             "Date": st.column_config.Column(width=None),
             "Venue": st.column_config.Column(width=None),
-            "Opponent": st.column_config.Column(width=None), # Auto-fits to text length
+            "Opponent": st.column_config.Column(width=None),
             "Status": st.column_config.Column(width=None)
         }
     )
