@@ -53,7 +53,6 @@ SCHOOL_DATA = {
     }
 }
 
-# --- TOOLS ---
 def get_school_data(url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
@@ -92,11 +91,20 @@ def get_school_data(url):
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
                 res = item.select_one('.sidearm-schedule-game-result')
-                date_el = item.select_one('.sidearm-schedule-game-upcoming-date, .sidearm-schedule-game-date')
-                date_val = date_el.get_text(" ", strip=True) if date_el else "TBD"
-                if (date_val == "2026" or date_val == "TBD") and item.has_attr('aria-label'):
-                    match = re.search(r'[A-Z][a-z]{2}\s\d{1,2}', item['aria-label'])
+                # NEW RECURSIVE DATE GRAB
+                date_container = item.select_one('.sidearm-schedule-game-date, .sidearm-schedule-game-upcoming-date')
+                date_val = "TBD"
+                if date_container:
+                    # Collects all text parts (Month, Day) and filters out the Year
+                    parts = [s.get_text(strip=True) for s in date_container.find_all(True)]
+                    date_val = " ".join([p for p in parts if p and p != "2026"])
+                
+                # Fallback to Aria-Label if container failed
+                if not date_val or date_val == "TBD":
+                    label = item.get('aria-label', '')
+                    match = re.search(r'[A-Z][a-z]{2}\s\d{1,2}', label)
                     if match: date_val = match.group(0)
+
                 if opp:
                     games.append({
                         "Date": date_val,
