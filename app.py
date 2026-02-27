@@ -22,7 +22,7 @@ SCHOOL_DATA = {
         "Virginia": "https://virginiasports.com/sports/mens-lacrosse/schedule/2026",
         "Rutgers": "https://scarletknights.com/sports/mens-lacrosse/schedule/2026",
         "Penn State": "https://gopsusports.com/sports/mens-lacrosse/schedule/2026",
-        "Johns Hopkins": "https://hopkinssports.com/sports/mens-lacrosse/schedule/2026",
+        "Johns Tournament": "https://hopkinssports.com/sports/mens-lacrosse/schedule/2026",
         "Denver": "https://denverpioneers.com/sports/mens-lacrosse/schedule/2026",
         "Saint Joseph's": "https://sjuhawks.com/sports/mens-lacrosse/schedule/2026",
         "Penn": "https://pennathletics.com/sports/mens-lacrosse/schedule/2026",
@@ -52,39 +52,26 @@ SCHOOL_DATA = {
     }
 }
 
-# --- DATA HELPERS ---
-
-def get_team_record(soup):
-    """Attempts to find the team record (e.g., 4-1) in the header or sidebar."""
-    record_text = "Record: N/A"
-    # Common Sidearm/WMT patterns for records
-    targets = soup.find_all(text=re.compile(r'\d+-\d+'))
-    for t in targets:
-        if "Overall" in t.parent.text or "Record" in t.parent.text:
-            return t.parent.text.strip()
-    return record_text
-
-def clean_date_logic(item):
-    date_stack = item.select_one('.sidearm-schedule-game-upcoming-date, .sidearm-schedule-game-date')
-    if date_stack:
-        text = date_stack.get_text(" ", strip=True)
-        if len(text) < 5 or text.isdigit():
-             label = item.get('aria-label', '')
-             match = re.search(r'[A-Z][a-z]{2}\s\d{1,2}', label)
-             return match.group(0) if match else text
-        return text
-    return "TBD"
+# --- TOOLS ---
 
 def get_school_data(url):
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=8)
+        if resp.status_code != 200: return "N/A", pd.DataFrame()
+        
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        record = get_team_record(soup)
-        games = []
+        # Record Hunt
+        record = "Record: N/A"
+        rec_tags = soup.find_all(string=re.compile(r'\d+-\d+'))
+        for r in rec_tags:
+            if any(key in r.parent.text for key in ["Overall", "Record", "W-L"]):
+                record = r.strip()
+                break
 
-        # UNC - TEXT TABLE
+        games = []
+        # UNC TEXT
         if "goheels.com" in url:
             table = soup.find('table')
             if table:
@@ -94,41 +81,9 @@ def get_school_data(url):
                         games.append({"Date": cols[0].get_text(strip=True), 
                                       "Opponent": cols[3].get_text(strip=True), 
                                       "Status": cols[6].get_text(strip=True) or "Scheduled"})
-        
-        # NOTRE DAME - WMT
+        # WMT / NOTRE DAME
         elif "fightingirish.com" in url:
             for item in soup.select('.c-event-card'):
                 opp = item.select_one('.c-event-card__opponent')
-                date = item.select_one('.c-event-card__date')
                 res = item.select_one('.c-event-card__score')
-                if opp:
-                    games.append({"Date": date.text.strip() if date else "TBD", 
-                                  "Opponent": opp.text.strip(), 
-                                  "Status": res.text.strip() if res else "Upcoming"})
-
-        # SIDEARM (D1/D3)
-        else:
-            for item in soup.select('.sidearm-schedule-game'):
-                opp = item.select_one('.sidearm-schedule-game-opponent-name')
-                res = item.select_one('.sidearm-schedule-game-result')
-                game_date = clean_date_logic(item)
-                if opp:
-                    games.append({
-                        "Date": game_date,
-                        "Opponent": opp.get_text(strip=True).replace("Opponent:", "").strip(),
-                        "Status": res.get_text(strip=True) if res else "Scheduled"
-                    })
-        
-        return record, pd.DataFrame(games).drop_duplicates()
-    except:
-        return "Record: N/A", pd.DataFrame()
-
-# --- COLOR CODING LOGIC ---
-
-def style_status(val):
-    """Applies colors: Green for Wins, Red for Losses, Yellow for Live/Upcoming."""
-    color = 'white'
-    if 'W' in val: color = '#28a745' # Green
-    elif 'L' in val: color = '#dc3545' # Red
-    elif any(x in val.upper() for x in ['AM', 'PM', 'LIVE', 'TBD']): color = '#ffc107' # Yellow/Gold
-    return f
+                date = item.select_one('.c-event-card__date
