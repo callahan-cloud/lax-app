@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
-from datetime import datetime  # This line stays in the code!
+from datetime import datetime
 
 # --- TOP 20 DIRECTORY ---
 SCHOOL_DATA = {
@@ -106,15 +106,28 @@ def get_school_data(url):
                     date_val = " ".join(parts) if parts else date_container.get_text(" ", strip=True).replace("2026", "").strip()
                 if opp:
                     games.append({"Date": date_val, "Opponent": opp.get_text(strip=True).replace("Opponent:", "").strip(), "Status": res.get_text(strip=True) if res else "Scheduled"})
-        return record, pd.DataFrame(games).drop_duplicates()
+        
+        final_df = pd.DataFrame(games).drop_duplicates()
+        if not final_df.empty:
+            final_df.insert(0, "Game #", range(1, len(final_df) + 1))
+            final_df["Game #"] = final_df["Game #"].apply(lambda x: f"Game {x}")
+        return record, final_df
     except:
         return "N/A", pd.DataFrame()
 
-def color_rows(val):
-    if 'W' in val: return 'background-color: rgba(40, 167, 69, 0.25)'
-    if 'L' in val: return 'background-color: rgba(220, 53, 69, 0.25)'
-    if any(x in val.upper() for x in ['AM', 'PM', 'LIVE']): return 'background-color: rgba(255, 193, 7, 0.25)'
-    return ''
+def style_df(styler):
+    # Style for Game # column
+    styler.applymap(lambda x: 'background-color: rgba(70, 130, 180, 0.2); color: #ADD8E6; font-weight: bold;', subset=['Game #'])
+    
+    # Style for Status column
+    def color_status(val):
+        if 'W' in val: return 'background-color: rgba(40, 167, 69, 0.3); color: #90EE90; font-weight: bold;'
+        if 'L' in val: return 'background-color: rgba(220, 53, 69, 0.3); color: #FFB6C1;'
+        if any(x in val.upper() for x in ['AM', 'PM', 'LIVE']): return 'background-color: rgba(255, 193, 7, 0.3); color: #FFFACD;'
+        return ''
+    
+    styler.applymap(color_status, subset=['Status'])
+    return styler
 
 # --- UI ---
 st.set_page_config(page_title="LaxTracker Pro", page_icon="🥍", layout="wide")
@@ -137,11 +150,10 @@ if not df.empty:
     c1.metric(f"Record", record)
     c2.caption(f"Synced at {datetime.now().strftime('%I:%M %p')}")
     
-    # CALCULATE TABLE HEIGHT: (~35px per row + 40px for header)
-    dynamic_height = (len(df) * 35) + 40
+    dynamic_height = (len(df) * 35) + 50
     
     st.dataframe(
-        df.style.applymap(color_rows, subset=['Status']),
+        style_df(df.style),
         use_container_width=True,
         hide_index=True,
         height=dynamic_height
@@ -151,4 +163,3 @@ else:
 
 st.divider()
 st.link_button("📺 ESPN Lacrosse Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
-
