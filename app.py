@@ -55,22 +55,19 @@ SCHOOL_DATA = {
 
 # --- TOOLS ---
 def get_team_record_robust(soup):
-    """Deep scan for team record using known platform patterns."""
-    # 1. Look for Sidearm 'overall-record' class
-    rec_el = soup.select_one('.sidearm-schedule-record, .record, .overall-record')
-    if rec_el:
-        return rec_el.get_text(strip=True).replace("Overall", "").replace("Record:", "").strip()
+    """Deep scan for team record using CSS classes and string matching."""
+    # Pattern 1: Sidearm specific classes
+    targets = ['.sidearm-schedule-record', '.overall-record', '.record', '.c-schedule-header__record']
+    for selector in targets:
+        found = soup.select_one(selector)
+        if found:
+            return found.get_text(strip=True).replace("Overall", "").replace("Record:", "").strip()
     
-    # 2. Look for Notre Dame / WMT pattern
-    wmt_rec = soup.select_one('.c-schedule-header__record')
-    if wmt_rec:
-        return wmt_rec.get_text(strip=True)
-
-    # 3. Regex search for W-L pattern in common header spots
-    for span in soup.find_all(['span', 'div', 'li']):
-        text = span.get_text(strip=True)
-        if re.search(r'^\d+-\d+$', text) and any(k in span.parent.text for k in ["Record", "Overall"]):
-            return text
+    # Pattern 2: Search for text content matching "Overall: X-X"
+    rec_text = soup.find(string=re.compile(r'Overall:?\s*\d+-\d+'))
+    if rec_text:
+        match = re.search(r'\d+-\d+', rec_text)
+        if match: return match.group(0)
             
     return "N/A"
 
@@ -81,29 +78,31 @@ def get_school_data(url):
         if resp.status_code != 200: return "N/A", pd.DataFrame()
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # New robust record hunting
         record = get_team_record_robust(soup)
-
         games = []
-        # SCRAPER LOGIC
+
         if "goheels.com" in url:
             table = soup.find('table')
             if table:
                 for row in table.find_all('tr')[1:]:
                     cols = row.find_all('td')
                     if len(cols) >= 6:
-                        games.append({"Date": cols[0].get_text(strip=True), 
-                                      "Opponent": cols[3].get_text(strip=True), 
-                                      "Status": cols[6].get_text(strip=True) or "Scheduled"})
+                        games.append({
+                            "Date": cols[0].get_text(strip=True), 
+                            "Opponent": cols[3].get_text(strip=True), 
+                            "Status": cols[6].get_text(strip=True) or "Scheduled"
+                        })
         elif "fightingirish.com" in url:
             for item in soup.select('.c-event-card'):
                 opp = item.select_one('.c-event-card__opponent')
                 res = item.select_one('.c-event-card__score')
                 date = item.select_one('.c-event-card__date')
                 if opp:
-                    games.append({"Date": date.get_text(strip=True) if date else "TBD", 
-                                  "Opponent": opp.get_text(strip=True), 
-                                  "Status": res.get_text(strip=True) if res else "Upcoming"})
+                    games.append({
+                        "Date": date.get_text(strip=True) if date else "TBD", 
+                        "Opponent": opp.get_text(strip=True), 
+                        "Status": res.get_text(strip=True) if res else "Upcoming"
+                    })
         else:
             for item in soup.select('.sidearm-schedule-game'):
                 opp = item.select_one('.sidearm-schedule-game-opponent-name')
@@ -117,4 +116,43 @@ def get_school_data(url):
 
                 if opp:
                     games.append({
-                        "Date": date
+                        "Date": date_val,
+                        "Opponent": opp.get_text(strip=True).replace("Opponent:", "").strip(),
+                        "Status": res.get_text(strip=True) if res else "Scheduled"
+                    })
+        return record, pd.DataFrame(games).drop_duplicates()
+    except:
+        return "N/A", pd.DataFrame()
+
+def color_rows(val):
+    if 'W' in val: return 'background-color: rgba(40, 167, 69, 0.25)'
+    if 'L' in val: return 'background-color: rgba(220, 53, 69, 0.25)'
+    if any(x in val.upper() for x in ['AM', 'PM', 'LIVE']): return 'background-color: rgba(255, 193, 7, 0.25)'
+    return ''
+
+# --- UI ---
+st.set_page_config(page_title="LaxTracker Pro", page_icon="🥍", layout="wide")
+st.title("🥍 LaxTracker Elite Dashboard")
+
+div = st.sidebar.radio("Division", ["D1", "D3"])
+team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[div].keys()))
+
+with st.spinner(f"Syncing {team}..."):
+    record, df = get_school_data(SCHOOL_DATA[div][team])
+
+if not df.empty:
+    c1, c2 = st.columns([1, 1])
+    c1.metric(f"{team} Record", record)
+    c2.info(f"Last Sync: {datetime.now().strftime('%I:%M %p')}")
+    
+    st.dataframe(
+        df.style.applymap(color_rows, subset=['Status']),
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.error("No schedule found. Site may be offline.")
+    st.link_button("View Official Site", SCHOOL_DATA[div][team])
+
+st.divider()
+st.link_button("📺 Open ESPN Scoreboard", "https://www.espn.com/mens-college-lacrosse/scoreboard", use_container_width=True)
