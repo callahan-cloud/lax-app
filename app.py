@@ -59,30 +59,31 @@ def get_data(url):
         resp = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # 1. FIND RECORD (REGEX SEARCH ACROSS WHOLE PAGE)
+        # 1. FIND RECORD
         record = "0-0"
         page_text = soup.get_text(" ", strip=True)
         rec_match = re.search(r'Overall\s*(\d+-\d+)', page_text, re.I)
-        if rec_match:
-            record = rec_match.group(1)
-        else:
-            rec_match = re.search(r'(\d+-\d+)\s*Overall', page_text, re.I)
-            if rec_match: record = rec_match.group(1)
+        if rec_match: record = rec_match.group(1)
 
         games = []
-        # 2. FIND GAME ROWS
         for row in soup.select('.sidearm-schedule-game'):
+            # Grab all text including hidden links/aria-labels
+            # This is key for Salisbury!
             row_text = row.get_text(" ", strip=True)
             
             # --- DATE ---
             date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d+', row_text, re.I)
             date_val = date_match.group(0) if date_match else "TBD"
             
-            # --- TIME ---
+            # --- TIME (Salisbury Fix) ---
             time_val = "TBD"
-            time_match = re.search(r'(\d{1,2}:\d{2}\s*(?:AM|PM|A\.M\.|P\.M\.))', row_text, re.I)
-            if time_match:
-                time_val = time_match.group(1).upper().replace(".", "")
+            # Look for ##:## AM/PM OR "## PM" (Salisbury uses "3 pm" style often)
+            time_regex = r'(\d{1,2}(?::\d{2})?\s*(?:AM|PM|A\.M\.|P\.M\.))'
+            time_matches = re.findall(time_regex, row_text, re.I)
+            
+            if time_matches:
+                # Take the first valid time found in the row
+                time_val = time_matches[0].upper().replace(".", "")
             elif "noon" in row_text.lower():
                 time_val = "12:00 PM"
             
@@ -146,3 +147,4 @@ else:
 
 st.divider()
 st.caption(f"Last sync: {datetime.now().strftime('%m/%d %I:%M %p')}. Rankings: USILA/IWLCA Week 3.")
+
