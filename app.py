@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 
 # --- 2026 D3 TOP 20 DIRECTORY (HARDCODED) ---
-# Updated for USILA/IWLCA Week 3 (Feb 23 - March 2)
+# Updated for USILA/IWLCA Week 3
 SCHOOL_DATA = {
     "Men's Lacrosse": {
         "Tufts (#1)": "https://gotuftsjumbos.com/sports/mens-lacrosse/schedule/2026",
@@ -94,15 +94,11 @@ def get_data(url):
                 })
         
         df = pd.DataFrame(games).drop_duplicates()
-        if not df.empty:
-            df.insert(0, "#", [str(i) for i in range(1, len(df) + 1)])
         return record, df
     except:
         return "N/A", pd.DataFrame()
 
 def apply_styles(styler):
-    # '#' Column: Navy Badge
-    styler.applymap(lambda x: 'background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: left;', subset=['#'])
     # Venue: Amber Away / Slate Home
     styler.applymap(lambda x: 'color: #b45309; font-weight: bold;' if x == "Away" else 'color: #64748b;', subset=['Venue'])
     
@@ -117,16 +113,13 @@ def apply_styles(styler):
 # --- UI SETUP ---
 st.set_page_config(page_title="simple D3 score tracker", page_icon="🥍", layout="wide")
 
-# Sidebar
 st.sidebar.title("🥍 simple D3 score tracker")
 league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
 
-# Dynamic selection from hardcoded D3 teams
 team_options = list(SCHOOL_DATA[league].keys())
 team = st.sidebar.selectbox("Select Team (Ranked)", team_options)
 team_url = SCHOOL_DATA[league][team]
 
-# Main Header - Dark Slate for high contrast on light mode
 st.markdown(f"""
     <div style="line-height: 1.1; margin-bottom: 20px;">
         <span style="font-size: 38px; font-weight: 900; color: #0f172a; letter-spacing: -1px;">{team}</span><br>
@@ -138,7 +131,13 @@ with st.spinner(f"Updating {team}..."):
     record, df = get_data(team_url)
 
 if not df.empty:
-    st.metric("Season Record", record)
+    # Use columns to show record and total games side-by-side
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Season Record", record)
+    with col2:
+        st.metric("Regular Season Games", len(df))
+    
     st.dataframe(
         apply_styles(df.style), 
         use_container_width=True, 
