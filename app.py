@@ -29,56 +29,58 @@ SCHOOL_DATA = {
 }
 
 def get_data(url):
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
+    # Standard desktop header to get the full table
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # Get Record
+        # Pull overall record
         record = "0-0"
-        rec_el = soup.select_one('.sidearm-schedule-record, .c-schedule-header__record')
-        if rec_el:
-            match = re.search(r'(\d+-\d+)', rec_el.get_text())
-            if match: record = match.group(1)
+        rec_area = soup.find('div', class_='sidearm-schedule-record')
+        if rec_area:
+            record = rec_area.get_text(strip=True).split(' ')[0]
 
         games = []
-        for item in soup.select('.sidearm-schedule-game'):
-            # 1. DATE
-            date_el = item.select_one('.sidearm-schedule-game-date')
-            date_txt = date_el.get_text(strip=True) if date_el else "TBD"
+        # Target the main game rows
+        for row in soup.find_all('li', class_='sidearm-schedule-game'):
+            
+            # 1. DATE - Look for the dedicated date span
+            date_el = row.find('div', class_='sidearm-schedule-game-date')
+            date_txt = date_el.get_text(" ", strip=True) if date_el else "TBD"
+            
+            # 2. TIME - Look in the time span OR the result span if game hasn't happened
+            time_el = row.find('div', class_='sidearm-schedule-game-time')
+            res_el = row.find('div', class_='sidearm-schedule-game-result')
+            
+            raw_time = ""
+            if time_el: raw_time += time_el.get_text(" ", strip=True)
+            if res_el: raw_time += " " + res_el.get_text(" ", strip=True)
+            
+            # Regex to find #:## PM or AM
+            time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', raw_time.upper())
+            final_time = time_match.group(1) if time_match else "TBD"
+            if "NOON" in raw_time.upper(): final_time = "12:00 PM"
 
-            # 2. TIME (The Deep Scrape)
-            time_txt = "TBD"
-            time_container = item.select_one('.sidearm-schedule-game-time')
-            if time_container:
-                # Priority 1: Check aria-label (Best for Sidearm)
-                time_span = time_container.find('span')
-                if time_span and time_span.has_attr('aria-label'):
-                    time_txt = time_span['aria-label']
-                else:
-                    time_txt = time_container.get_text(strip=True)
-            
-            # Clean "P.M." or "p.m." to "PM"
-            time_txt = re.sub(r'\s+', ' ', time_txt)
-            time_txt = time_txt.replace('.', '').upper().strip()
-            
             # 3. OPPONENT
-            opp_el = item.select_one('.sidearm-schedule-game-opponent-name a, .sidearm-schedule-game-opponent-name span')
+            opp_el = row.find('div', class_='sidearm-schedule-game-opponent-name')
             opp_txt = opp_el.get_text(strip=True) if opp_el else "Unknown"
+            
+            # 4. VENUE & CLEANUP
+            away = row.find('span', class_='sidearm-schedule-game-location-is-away')
+            venue = "Away" if away or "@" in opp_txt else "Home"
+            opp_txt = opp_txt.replace("@", "").replace("Opponent:", "").strip()
 
-            # 4. VENUE
-            away_flag = item.select_one('.sidearm-schedule-game-location-is-away')
-            venue = "Away" if away_flag or "@" in opp_txt else "Home"
-            opp_txt = opp_txt.replace("@", "").strip()
-
-            # 5. STATUS / RESULT
-            res_el = item.select_one('.sidearm-schedule-game-result')
-            status = res_el.get_text(strip=True) if res_el else "Scheduled"
-            if "TBD" in status: status = "Scheduled"
-
+            # 5. STATUS (W/L or Scheduled)
+            status = "Scheduled"
+            if res_el:
+                res_text = res_el.get_text(strip=True)
+                if any(x in res_text for x in ['W,', 'L,']):
+                    status = res_text
+            
             games.append({
                 "Date": date_txt,
-                "Time": time_txt,
+                "Time": final_time,
                 "Venue": venue,
                 "Opponent": opp_txt,
                 "Status": status
@@ -87,9 +89,9 @@ def get_data(url):
         df = pd.DataFrame(games).drop_duplicates()
         return record, df
     except Exception as e:
-        return f"Error: {e}", pd.DataFrame()
+        return f"Err: {e}", pd.DataFrame()
 
-# --- STREAMLIT UI ---
+# --- UI ---
 st.set_page_config(page_title="simple D3 score tracker", layout="wide")
 
 st.sidebar.title("🥍 simple D3 score tracker")
@@ -104,17 +106,18 @@ record, df = get_data(SCHOOL_DATA[league][team])
 if not df.empty:
     c1, c2 = st.columns(2)
     c1.metric("Record", record)
-    c2.metric("Games", len(df))
+    c2.metric("Total Games", len(df))
 
-    # Apply table styling
-    def style_df(s):
-        return s.applymap(lambda x: 'color: #b45309; font-weight: bold;' if x == "Away" else '', subset=['Venue'])\
-                .applymap(lambda x: 'background-color: #166534; color: white; font-weight: bold;' if 'W' in str(x) else '', subset=['Status'])\
-                .applymap(lambda x: 'background-color: #991b1b; color: white; font-weight: bold;' if 'L' in str(x) else '', subset=['Status'])
+    # Bold, clean styling for iPhone
+    def highlight(val):
+        if 'W' in str(val): return 'background-color: #166534; color: white; font-weight: bold;'
+        if 'L' in str(val): return 'background-color: #991b1b; color: white; font-weight: bold;'
+        if val == "Away": return 'color: #b45309; font-weight: bold;'
+        return ''
 
-    st.dataframe(style_df(df.style), use_container_width=True, hide_index=True)
+    st.dataframe(df.style.applymap(highlight), use_container_width=True, hide_index=True)
 else:
-    st.error("Could not fetch data. The website structure may have changed.")
+    st.error("Data refresh failed. Checking connection...")
 
 st.divider()
-st.caption(f"Last updated: {datetime.now().strftime('%I:%M %p')}")
+st.caption(f"Last sync: {datetime.now().strftime('%m/%d/%Y %I:%M %p')}")
