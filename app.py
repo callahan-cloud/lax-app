@@ -76,27 +76,45 @@ def get_data(url):
         soup = BeautifulSoup(resp.text, 'html.parser')
         record = get_record(soup)
         games = []
+        
         for item in soup.select('.sidearm-schedule-game'):
             opp_el = item.select_one('.sidearm-schedule-game-opponent-name, .sidearm-schedule-game-opponent-name-short')
             res_el = item.select_one('.sidearm-schedule-game-result')
-            time_el = item.select_one('.sidearm-schedule-game-time') # New selector for time
+            time_el = item.select_one('.sidearm-schedule-game-time')
             away_flag = item.select_one('.sidearm-schedule-game-location-is-away, .sidearm-schedule-game-away')
             
             if opp_el:
+                # 1. CLEAN TIME: Look for PM/AM specifically
+                raw_time = "TBD"
+                # Check dedicated time element
+                time_text = time_el.get_text(strip=True) if time_el else ""
+                # Check result element (often has "1:00 PM" before game starts)
+                res_text = res_el.get_text(strip=True) if res_el else ""
+                
+                # Use regex to find #:## PM/AM in either field
+                time_match = re.search(r'(\d{1,2}:\d{2}\s*(?:AM|PM|A\.M\.|P\.M\.))', time_text + " " + res_text, re.I)
+                if time_match:
+                    raw_time = time_match.group(1).upper().replace(".", "")
+                elif "noon" in (time_text + res_text).lower():
+                    raw_time = "12:00 PM"
+
+                # 2. CLEAN OPPONENT/VENUE
                 raw_opp = opp_el.get_text(strip=True).replace("Opponent:", "").strip()
                 is_away = "@" in raw_opp or "at " in raw_opp.lower() or away_flag is not None
                 venue = "Away" if is_away else "Home"
                 clean_opp = raw_opp.replace("@", "").replace("at ", "").strip()
                 
-                # Clean up time string (removes extra spaces/tags)
-                raw_time = time_el.get_text(strip=True) if time_el else "TBD"
+                # 3. STATUS: Only show result (W/L) if game is over
+                status = "Scheduled"
+                if res_el and any(x in res_text for x in ['W,', 'L,', 'W ', 'L ']):
+                    status = res_text.strip()
                 
                 games.append({
                     "Date": extract_date(item),
                     "Time": raw_time, 
                     "Venue": venue, 
                     "Opponent": clean_opp, 
-                    "Status": res_el.get_text(strip=True) if res_el else "Scheduled"
+                    "Status": status
                 })
         
         df = pd.DataFrame(games).drop_duplicates()
@@ -107,13 +125,13 @@ def get_data(url):
 def apply_styles(styler):
     # Venue: Amber Away / Slate Home
     styler.applymap(lambda x: 'color: #b45309; font-weight: bold;' if x == "Away" else 'color: #64748b;', subset=['Venue'])
-    # Time column: subtle styling
-    styler.applymap(lambda x: 'color: #1e293b; font-weight: 500;', subset=['Time'])
+    # Time: Bold Navy for visibility
+    styler.applymap(lambda x: 'color: #0f172a; font-weight: 700;' if x != "TBD" else 'color: #94a3b8;', subset=['Time'])
     
     def color_status(val):
         if 'W' in val: return 'background-color: #166534; color: #ffffff; font-weight: bold; border-radius: 4px;'
         if 'L' in val: return 'background-color: #991b1b; color: #ffffff; font-weight: bold; border-radius: 4px;'
-        return 'color: #334155;'
+        return 'color: #475569;'
         
     styler.applymap(color_status, subset=['Status'])
     return styler
@@ -143,7 +161,7 @@ if not df.empty:
     with col1:
         st.metric("Season Record", record)
     with col2:
-        st.metric("Scheduled Games", len(df))
+        st.metric("Total Games", len(df))
     
     st.dataframe(
         apply_styles(df.style), 
