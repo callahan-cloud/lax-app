@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 
-# --- 2026 D3 TOP 20 DIRECTORY ---
+# --- 2026 D3 DIRECTORY ---
 SCHOOL_DATA = {
     "Men's Lacrosse": {
         "Tufts (#1)": "https://gotuftsjumbos.com/sports/mens-lacrosse/schedule/2026",
@@ -17,161 +17,104 @@ SCHOOL_DATA = {
         "York (#7)": "https://ycpspartans.com/sports/mens-lacrosse/schedule/2026",
         "Stevens (#8)": "https://stevensducks.com/sports/mens-lacrosse/schedule/2026",
         "Gettysburg (#9)": "https://gettysburgsports.com/sports/mens-lacrosse/schedule/2026",
-        "SUNY Cortland (#10)": "https://www.cortlandreddragons.com/sports/mens-lacrosse/schedule/2026",
-        "St. Lawrence (#11)": "https://saintsathletics.com/sports/mens-lacrosse/schedule/2026",
-        "Dickinson (#12)": "https://dickinsonathletics.com/sports/mens-lacrosse/schedule/2026",
-        "Washington and Lee (#13)": "https://generalssports.com/sports/mens-lacrosse/schedule/2026",
-        "Amherst (#14)": "https://athletics.amherst.edu/sports/mens-lacrosse/schedule/2026",
-        "Lynchburg (#15)": "https://www.lynchburgsports.com/sports/mlax/schedule/2025-26",
-        "RPI (#16)": "https://rpiathletics.com/sports/mens-lacrosse/schedule/2026",
-        "Swarthmore (#17)": "https://swarthmoreathletics.com/sports/mens-lacrosse/schedule/2026",
-        "St. John Fisher (#18)": "https://athletics.sjf.edu/sports/mens-lacrosse/schedule/2026",
-        "Middlebury (#19)": "https://athletics.middlebury.edu/sports/mens-lacrosse/schedule/2026",
-        "Babson (#20)": "https://babsonathletics.com/sports/mens-lacrosse/schedule/2026"
+        "SUNY Cortland (#10)": "https://www.cortlandreddragons.com/sports/mens-lacrosse/schedule/2026"
     },
     "Women's Lacrosse": {
         "Middlebury (#1)": "https://athletics.middlebury.edu/sports/womens-lacrosse/schedule/2026",
         "Tufts (#2)": "https://gotuftsjumbos.com/sports/womens-lacrosse/schedule/2026",
         "Colby (#3)": "https://colbyathletics.com/sports/womens-lacrosse/schedule/2026",
         "Gettysburg (#4)": "https://gettysburgsports.com/sports/womens-lacrosse/schedule/2026",
-        "Wesleyan (#5)": "https://athletics.wesleyan.edu/sports/womens-lacrosse/schedule/2026",
-        "Franklin & Marshall (#6)": "https://godiplomats.com/sports/womens-lacrosse/schedule/2026",
-        "York (#7)": "https://ycpspartans.com/sports/womens-lacrosse/schedule/2026",
-        "Salisbury (#8)": "https://suseagulls.com/sports/womens-lacrosse/schedule/2026",
-        "Washington and Lee (#9)": "https://generalssports.com/sports/womens-lacrosse/schedule/2026",
-        "Denison (#10)": "https://denisonbigred.com/sports/womens-lacrosse/schedule/2026",
-        "St. John Fisher (#11)": "https://athletics.sjf.edu/sports/womens-lacrosse/schedule/2026",
-        "William Smith (#12)": "https://hwsathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Pomona-Pitzer (#13)": "https://sagehens.com/sports/womens-lacrosse/schedule/2026",
-        "Amherst (#14)": "https://athletics.amherst.edu/sports/womens-lacrosse/schedule/2026",
-        "Stevens (#15)": "https://stevensducks.com/sports/womens-lacrosse/schedule/2026",
-        "TCNJ (#16)": "https://tcnjathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Rowan (#17)": "https://www.rowanathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Haverford (#18)": "https://haverfordathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Babson (#19)": "https://babsonathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Trinity (#20)": "https://bantamsports.com/sports/womens-lacrosse/schedule/2026"
+        "Wesleyan (#5)": "https://athletics.wesleyan.edu/sports/womens-lacrosse/schedule/2026"
     }
 }
 
-# --- TOOLKIT ---
-def extract_date(element):
-    month_pattern = r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
-    day_pattern = r"(\d{1,2})"
-    text = element.get_text(" ", strip=True)
-    match = re.search(f"{month_pattern}\s*{day_pattern}", text, re.IGNORECASE)
-    return f"{match.group(1)} {match.group(2)}" if match else "TBD"
-
-def get_record(soup):
-    for selector in ['.sidearm-schedule-record', '.overall-record', '.record', '.c-schedule-header__record']:
-        found = soup.select_one(selector)
-        if found:
-            match = re.search(r'(\d+-\d+)', found.get_text(strip=True))
-            if match: return match.group(1)
-    return "0-0"
-
 def get_data(url):
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        record = get_record(soup)
-        games = []
         
-        for item in soup.select('.sidearm-schedule-game'):
-            opp_el = item.select_one('.sidearm-schedule-game-opponent-name, .sidearm-schedule-game-opponent-name-short')
-            res_el = item.select_one('.sidearm-schedule-game-result')
-            time_el = item.select_one('.sidearm-schedule-game-time')
-            away_flag = item.select_one('.sidearm-schedule-game-location-is-away, .sidearm-schedule-game-away')
-            
-            if opp_el:
-                # 1. CLEAN TIME: Look for PM/AM specifically
-                raw_time = "TBD"
-                # Check dedicated time element
-                time_text = time_el.get_text(strip=True) if time_el else ""
-                # Check result element (often has "1:00 PM" before game starts)
-                res_text = res_el.get_text(strip=True) if res_el else ""
-                
-                # Use regex to find #:## PM/AM in either field
-                time_match = re.search(r'(\d{1,2}:\d{2}\s*(?:AM|PM|A\.M\.|P\.M\.))', time_text + " " + res_text, re.I)
-                if time_match:
-                    raw_time = time_match.group(1).upper().replace(".", "")
-                elif "noon" in (time_text + res_text).lower():
-                    raw_time = "12:00 PM"
+        # Get Record
+        record = "0-0"
+        rec_el = soup.select_one('.sidearm-schedule-record, .c-schedule-header__record')
+        if rec_el:
+            match = re.search(r'(\d+-\d+)', rec_el.get_text())
+            if match: record = match.group(1)
 
-                # 2. CLEAN OPPONENT/VENUE
-                raw_opp = opp_el.get_text(strip=True).replace("Opponent:", "").strip()
-                is_away = "@" in raw_opp or "at " in raw_opp.lower() or away_flag is not None
-                venue = "Away" if is_away else "Home"
-                clean_opp = raw_opp.replace("@", "").replace("at ", "").strip()
-                
-                # 3. STATUS: Only show result (W/L) if game is over
-                status = "Scheduled"
-                if res_el and any(x in res_text for x in ['W,', 'L,', 'W ', 'L ']):
-                    status = res_text.strip()
-                
-                games.append({
-                    "Date": extract_date(item),
-                    "Time": raw_time, 
-                    "Venue": venue, 
-                    "Opponent": clean_opp, 
-                    "Status": status
-                })
-        
+        games = []
+        for item in soup.select('.sidearm-schedule-game'):
+            # 1. DATE
+            date_el = item.select_one('.sidearm-schedule-game-date')
+            date_txt = date_el.get_text(strip=True) if date_el else "TBD"
+
+            # 2. TIME (The Deep Scrape)
+            time_txt = "TBD"
+            time_container = item.select_one('.sidearm-schedule-game-time')
+            if time_container:
+                # Priority 1: Check aria-label (Best for Sidearm)
+                time_span = time_container.find('span')
+                if time_span and time_span.has_attr('aria-label'):
+                    time_txt = time_span['aria-label']
+                else:
+                    time_txt = time_container.get_text(strip=True)
+            
+            # Clean "P.M." or "p.m." to "PM"
+            time_txt = re.sub(r'\s+', ' ', time_txt)
+            time_txt = time_txt.replace('.', '').upper().strip()
+            
+            # 3. OPPONENT
+            opp_el = item.select_one('.sidearm-schedule-game-opponent-name a, .sidearm-schedule-game-opponent-name span')
+            opp_txt = opp_el.get_text(strip=True) if opp_el else "Unknown"
+
+            # 4. VENUE
+            away_flag = item.select_one('.sidearm-schedule-game-location-is-away')
+            venue = "Away" if away_flag or "@" in opp_txt else "Home"
+            opp_txt = opp_txt.replace("@", "").strip()
+
+            # 5. STATUS / RESULT
+            res_el = item.select_one('.sidearm-schedule-game-result')
+            status = res_el.get_text(strip=True) if res_el else "Scheduled"
+            if "TBD" in status: status = "Scheduled"
+
+            games.append({
+                "Date": date_txt,
+                "Time": time_txt,
+                "Venue": venue,
+                "Opponent": opp_txt,
+                "Status": status
+            })
+
         df = pd.DataFrame(games).drop_duplicates()
         return record, df
-    except:
-        return "N/A", pd.DataFrame()
+    except Exception as e:
+        return f"Error: {e}", pd.DataFrame()
 
-def apply_styles(styler):
-    # Venue: Amber Away / Slate Home
-    styler.applymap(lambda x: 'color: #b45309; font-weight: bold;' if x == "Away" else 'color: #64748b;', subset=['Venue'])
-    # Time: Bold Navy for visibility
-    styler.applymap(lambda x: 'color: #0f172a; font-weight: 700;' if x != "TBD" else 'color: #94a3b8;', subset=['Time'])
-    
-    def color_status(val):
-        if 'W' in val: return 'background-color: #166534; color: #ffffff; font-weight: bold; border-radius: 4px;'
-        if 'L' in val: return 'background-color: #991b1b; color: #ffffff; font-weight: bold; border-radius: 4px;'
-        return 'color: #475569;'
-        
-    styler.applymap(color_status, subset=['Status'])
-    return styler
-
-# --- UI SETUP ---
-st.set_page_config(page_title="simple D3 score tracker", page_icon="🥍", layout="wide")
+# --- STREAMLIT UI ---
+st.set_page_config(page_title="simple D3 score tracker", layout="wide")
 
 st.sidebar.title("🥍 simple D3 score tracker")
 league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
+team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[league].keys()))
 
-team_options = list(SCHOOL_DATA[league].keys())
-team = st.sidebar.selectbox("Select Team (Ranked)", team_options)
-team_url = SCHOOL_DATA[league][team]
+st.markdown(f"## {team}")
+st.markdown("### D3 Score Tracker • 2026 Season")
 
-st.markdown(f"""
-    <div style="line-height: 1.1; margin-bottom: 20px;">
-        <span style="font-size: 38px; font-weight: 900; color: #0f172a; letter-spacing: -1px;">{team}</span><br>
-        <span style="font-size: 14px; font-weight: 700; color: #64748b; letter-spacing: 2px; text-transform: uppercase;">D3 Score Tracker • 2026 Season</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-with st.spinner(f"Updating {team}..."):
-    record, df = get_data(team_url)
+record, df = get_data(SCHOOL_DATA[league][team])
 
 if not df.empty:
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Season Record", record)
-    with col2:
-        st.metric("Total Games", len(df))
-    
-    st.dataframe(
-        apply_styles(df.style), 
-        use_container_width=True, 
-        hide_index=True, 
-        height=(len(df) * 38) + 100
-    )
+    c1, c2 = st.columns(2)
+    c1.metric("Record", record)
+    c2.metric("Games", len(df))
+
+    # Apply table styling
+    def style_df(s):
+        return s.applymap(lambda x: 'color: #b45309; font-weight: bold;' if x == "Away" else '', subset=['Venue'])\
+                .applymap(lambda x: 'background-color: #166534; color: white; font-weight: bold;' if 'W' in str(x) else '', subset=['Status'])\
+                .applymap(lambda x: 'background-color: #991b1b; color: white; font-weight: bold;' if 'L' in str(x) else '', subset=['Status'])
+
+    st.dataframe(style_df(df.style), use_container_width=True, hide_index=True)
 else:
-    st.warning(f"Data for {team} is currently unavailable.")
-    st.link_button(f"🔗 View {team} Official Schedule", team_url, use_container_width=True)
+    st.error("Could not fetch data. The website structure may have changed.")
 
 st.divider()
-st.caption(f"Sync attempt at {datetime.now().strftime('%m/%d/%Y %I:%M %p')}. Rankings: USILA/IWLCA Week 3.")
+st.caption(f"Last updated: {datetime.now().strftime('%I:%M %p')}")
