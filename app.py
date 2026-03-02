@@ -5,8 +5,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 
-# --- 2026 D3 TOP 20 DIRECTORY (HARDCODED) ---
-# Updated for USILA/IWLCA Week 3
+# --- 2026 D3 TOP 20 DIRECTORY ---
 SCHOOL_DATA = {
     "Men's Lacrosse": {
         "Tufts (#1)": "https://gotuftsjumbos.com/sports/mens-lacrosse/schedule/2026",
@@ -80,14 +79,21 @@ def get_data(url):
         for item in soup.select('.sidearm-schedule-game'):
             opp_el = item.select_one('.sidearm-schedule-game-opponent-name, .sidearm-schedule-game-opponent-name-short')
             res_el = item.select_one('.sidearm-schedule-game-result')
+            time_el = item.select_one('.sidearm-schedule-game-time') # New selector for time
             away_flag = item.select_one('.sidearm-schedule-game-location-is-away, .sidearm-schedule-game-away')
+            
             if opp_el:
                 raw_opp = opp_el.get_text(strip=True).replace("Opponent:", "").strip()
                 is_away = "@" in raw_opp or "at " in raw_opp.lower() or away_flag is not None
                 venue = "Away" if is_away else "Home"
                 clean_opp = raw_opp.replace("@", "").replace("at ", "").strip()
+                
+                # Clean up time string (removes extra spaces/tags)
+                raw_time = time_el.get_text(strip=True) if time_el else "TBD"
+                
                 games.append({
-                    "Date": extract_date(item), 
+                    "Date": extract_date(item),
+                    "Time": raw_time, 
                     "Venue": venue, 
                     "Opponent": clean_opp, 
                     "Status": res_el.get_text(strip=True) if res_el else "Scheduled"
@@ -101,6 +107,8 @@ def get_data(url):
 def apply_styles(styler):
     # Venue: Amber Away / Slate Home
     styler.applymap(lambda x: 'color: #b45309; font-weight: bold;' if x == "Away" else 'color: #64748b;', subset=['Venue'])
+    # Time column: subtle styling
+    styler.applymap(lambda x: 'color: #1e293b; font-weight: 500;', subset=['Time'])
     
     def color_status(val):
         if 'W' in val: return 'background-color: #166534; color: #ffffff; font-weight: bold; border-radius: 4px;'
@@ -131,12 +139,11 @@ with st.spinner(f"Updating {team}..."):
     record, df = get_data(team_url)
 
 if not df.empty:
-    # Use columns to show record and total games side-by-side
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Season Record", record)
     with col2:
-        st.metric("Regular Season Games", len(df))
+        st.metric("Scheduled Games", len(df))
     
     st.dataframe(
         apply_styles(df.style), 
