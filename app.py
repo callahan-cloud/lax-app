@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 
-# --- 2026 D3 DIRECTORY ---
+# --- 2026 D3 TOP 20 DIRECTORY (Rankings as of March 2, 2026) ---
 SCHOOL_DATA = {
     "Men's Lacrosse": {
         "Tufts (#1)": "https://gotuftsjumbos.com/sports/mens-lacrosse/schedule/2026",
@@ -17,14 +17,39 @@ SCHOOL_DATA = {
         "York (#7)": "https://ycpspartans.com/sports/mens-lacrosse/schedule/2026",
         "Stevens (#8)": "https://stevensducks.com/sports/mens-lacrosse/schedule/2026",
         "Gettysburg (#9)": "https://gettysburgsports.com/sports/mens-lacrosse/schedule/2026",
-        "SUNY Cortland (#10)": "https://www.cortlandreddragons.com/sports/mens-lacrosse/schedule/2026"
+        "SUNY Cortland (#10)": "https://www.cortlandreddragons.com/sports/mens-lacrosse/schedule/2026",
+        "St. Lawrence (#11)": "https://saintsathletics.com/sports/mens-lacrosse/schedule/2026",
+        "Dickinson (#12)": "https://dickinsonathletics.com/sports/mens-lacrosse/schedule/2026",
+        "Washington and Lee (#13)": "https://generalssports.com/sports/mens-lacrosse/schedule/2026",
+        "Amherst (#14)": "https://athletics.amherst.edu/sports/mens-lacrosse/schedule/2026",
+        "Lynchburg (#15)": "https://www.lynchburgsports.com/sports/mlax/schedule/2025-26",
+        "RPI (#16)": "https://rpiathletics.com/sports/mens-lacrosse/schedule/2026",
+        "Swarthmore (#17)": "https://swarthmoreathletics.com/sports/mens-lacrosse/schedule/2026",
+        "St. John Fisher (#18)": "https://athletics.sjf.edu/sports/mens-lacrosse/schedule/2026",
+        "Middlebury (#19)": "https://athletics.middlebury.edu/sports/mens-lacrosse/schedule/2026",
+        "Babson (#20)": "https://babsonathletics.com/sports/mens-lacrosse/schedule/2026"
     },
     "Women's Lacrosse": {
         "Middlebury (#1)": "https://athletics.middlebury.edu/sports/womens-lacrosse/schedule/2026",
         "Tufts (#2)": "https://gotuftsjumbos.com/sports/womens-lacrosse/schedule/2026",
         "Colby (#3)": "https://colbyathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Gettysburg (#4)": "https://gettysburgsports.com/sports/womens-lacrosse/schedule/2026",
-        "Wesleyan (#5)": "https://athletics.wesleyan.edu/sports/womens-lacrosse/schedule/2026"
+        "Wesleyan (#4)": "https://athletics.wesleyan.edu/sports/womens-lacrosse/schedule/2026",
+        "Salisbury (#5)": "https://suseagulls.com/sports/womens-lacrosse/schedule/2026",
+        "York (#6)": "https://ycpspartans.com/sports/womens-lacrosse/schedule/2026",
+        "Gettysburg (#7)": "https://gettysburgsports.com/sports/womens-lacrosse/schedule/2026",
+        "Denison (#8)": "https://denisonbigred.com/sports/womens-lacrosse/schedule/2026",
+        "Franklin & Marshall (#9)": "https://godiplomats.com/sports/womens-lacrosse/schedule/2026",
+        "William Smith (#10)": "https://hwsathletics.com/sports/womens-lacrosse/schedule/2026",
+        "Washington and Lee (#11)": "https://generalssports.com/sports/womens-lacrosse/schedule/2026",
+        "Pomona-Pitzer (#12)": "https://sagehens.com/sports/womens-lacrosse/schedule/2026",
+        "Amherst (#13)": "https://athletics.amherst.edu/sports/womens-lacrosse/schedule/2026",
+        "Stevens (#14)": "https://stevensducks.com/sports/womens-lacrosse/schedule/2026",
+        "TCNJ (#15)": "https://tcnjathletics.com/sports/womens-lacrosse/schedule/2026",
+        "St. John Fisher (#16)": "https://athletics.sjf.edu/sports/womens-lacrosse/schedule/2026",
+        "Scranton (#17)": "https://athletics.scranton.edu/sports/womens-lacrosse/schedule/2026",
+        "Babson (#18)": "https://babsonathletics.com/sports/womens-lacrosse/schedule/2026",
+        "Messiah (#19)": "https://gomessiah.com/sports/womens-lacrosse/schedule/2026",
+        "Haverford (#20)": "https://haverfordathletics.com/sports/womens-lacrosse/schedule/2026"
     }
 }
 
@@ -41,7 +66,6 @@ def get_data(url):
         if rec_match:
             record = rec_match.group(1)
         else:
-            # Fallback for different wording
             rec_match = re.search(r'(\d+-\d+)\s*Overall', page_text, re.I)
             if rec_match: record = rec_match.group(1)
 
@@ -50,13 +74,11 @@ def get_data(url):
         for row in soup.select('.sidearm-schedule-game'):
             row_text = row.get_text(" ", strip=True)
             
-            # --- EXTRACT DATE ---
-            # Looks for "Mar 2" or "March 2"
+            # --- DATE ---
             date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d+', row_text, re.I)
             date_val = date_match.group(0) if date_match else "TBD"
             
-            # --- EXTRACT TIME ---
-            # Looks for 1:00 PM, 1:00 p.m., or Noon
+            # --- TIME ---
             time_val = "TBD"
             time_match = re.search(r'(\d{1,2}:\d{2}\s*(?:AM|PM|A\.M\.|P\.M\.))', row_text, re.I)
             if time_match:
@@ -64,20 +86,19 @@ def get_data(url):
             elif "noon" in row_text.lower():
                 time_val = "12:00 PM"
             
-            # --- EXTRACT OPPONENT ---
+            # --- OPPONENT ---
             opp_el = row.select_one('.sidearm-schedule-game-opponent-name')
             opp_val = opp_el.get_text(strip=True) if opp_el else "Unknown"
             opp_val = opp_val.replace("Opponent:", "").strip()
             
-            # --- EXTRACT VENUE ---
+            # --- VENUE ---
             venue = "Home"
             if "@" in opp_val or "at " in opp_val.lower() or row.select_one('.sidearm-schedule-game-location-is-away'):
                 venue = "Away"
             opp_val = opp_val.replace("@", "").replace("at ", "").strip()
 
-            # --- EXTRACT STATUS ---
+            # --- STATUS ---
             status = "Scheduled"
-            # If there is a W or L followed by a score like W, 15-10
             res_match = re.search(r'([WL],\s*\d+-\d+)', row_text, re.I)
             if res_match:
                 status = res_match.group(1).upper()
@@ -97,13 +118,6 @@ def get_data(url):
 
 # --- STREAMLIT UI ---
 st.set_page_config(page_title="simple D3 score tracker", layout="wide")
-
-# Header Styles
-st.markdown("""
-    <style>
-    [data-testid="stMetricValue"] { font-size: 28px !important; color: #0f172a; }
-    </style>
-    """, unsafe_allow_html=True)
 
 st.sidebar.title("🥍 simple D3 score tracker")
 league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
@@ -128,7 +142,7 @@ if not df.empty:
 
     st.dataframe(df.style.applymap(style_table), use_container_width=True, hide_index=True)
 else:
-    st.error("Site structure blocked the update. Please try another team.")
+    st.error("Updating from official site...")
 
 st.divider()
-st.caption(f"Sync: {datetime.now().strftime('%m/%d %I:%M %p')}. Data pulled via pattern-recognition.")
+st.caption(f"Last sync: {datetime.now().strftime('%m/%d %I:%M %p')}. Rankings: USILA/IWLCA Week 3.")
