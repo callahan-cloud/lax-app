@@ -29,70 +29,81 @@ SCHOOL_DATA = {
 }
 
 def get_data(url):
-    # Standard desktop header to get the full table
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
         resp = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # Pull overall record
+        # 1. FIND RECORD (REGEX SEARCH ACROSS WHOLE PAGE)
         record = "0-0"
-        rec_area = soup.find('div', class_='sidearm-schedule-record')
-        if rec_area:
-            record = rec_area.get_text(strip=True).split(' ')[0]
+        page_text = soup.get_text(" ", strip=True)
+        rec_match = re.search(r'Overall\s*(\d+-\d+)', page_text, re.I)
+        if rec_match:
+            record = rec_match.group(1)
+        else:
+            # Fallback for different wording
+            rec_match = re.search(r'(\d+-\d+)\s*Overall', page_text, re.I)
+            if rec_match: record = rec_match.group(1)
 
         games = []
-        # Target the main game rows
-        for row in soup.find_all('li', class_='sidearm-schedule-game'):
+        # 2. FIND GAME ROWS
+        for row in soup.select('.sidearm-schedule-game'):
+            row_text = row.get_text(" ", strip=True)
             
-            # 1. DATE - Look for the dedicated date span
-            date_el = row.find('div', class_='sidearm-schedule-game-date')
-            date_txt = date_el.get_text(" ", strip=True) if date_el else "TBD"
+            # --- EXTRACT DATE ---
+            # Looks for "Mar 2" or "March 2"
+            date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d+', row_text, re.I)
+            date_val = date_match.group(0) if date_match else "TBD"
             
-            # 2. TIME - Look in the time span OR the result span if game hasn't happened
-            time_el = row.find('div', class_='sidearm-schedule-game-time')
-            res_el = row.find('div', class_='sidearm-schedule-game-result')
+            # --- EXTRACT TIME ---
+            # Looks for 1:00 PM, 1:00 p.m., or Noon
+            time_val = "TBD"
+            time_match = re.search(r'(\d{1,2}:\d{2}\s*(?:AM|PM|A\.M\.|P\.M\.))', row_text, re.I)
+            if time_match:
+                time_val = time_match.group(1).upper().replace(".", "")
+            elif "noon" in row_text.lower():
+                time_val = "12:00 PM"
             
-            raw_time = ""
-            if time_el: raw_time += time_el.get_text(" ", strip=True)
-            if res_el: raw_time += " " + res_el.get_text(" ", strip=True)
+            # --- EXTRACT OPPONENT ---
+            opp_el = row.select_one('.sidearm-schedule-game-opponent-name')
+            opp_val = opp_el.get_text(strip=True) if opp_el else "Unknown"
+            opp_val = opp_val.replace("Opponent:", "").strip()
             
-            # Regex to find #:## PM or AM
-            time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', raw_time.upper())
-            final_time = time_match.group(1) if time_match else "TBD"
-            if "NOON" in raw_time.upper(): final_time = "12:00 PM"
+            # --- EXTRACT VENUE ---
+            venue = "Home"
+            if "@" in opp_val or "at " in opp_val.lower() or row.select_one('.sidearm-schedule-game-location-is-away'):
+                venue = "Away"
+            opp_val = opp_val.replace("@", "").replace("at ", "").strip()
 
-            # 3. OPPONENT
-            opp_el = row.find('div', class_='sidearm-schedule-game-opponent-name')
-            opp_txt = opp_el.get_text(strip=True) if opp_el else "Unknown"
-            
-            # 4. VENUE & CLEANUP
-            away = row.find('span', class_='sidearm-schedule-game-location-is-away')
-            venue = "Away" if away or "@" in opp_txt else "Home"
-            opp_txt = opp_txt.replace("@", "").replace("Opponent:", "").strip()
-
-            # 5. STATUS (W/L or Scheduled)
+            # --- EXTRACT STATUS ---
             status = "Scheduled"
-            if res_el:
-                res_text = res_el.get_text(strip=True)
-                if any(x in res_text for x in ['W,', 'L,']):
-                    status = res_text
-            
+            # If there is a W or L followed by a score like W, 15-10
+            res_match = re.search(r'([WL],\s*\d+-\d+)', row_text, re.I)
+            if res_match:
+                status = res_match.group(1).upper()
+
             games.append({
-                "Date": date_txt,
-                "Time": final_time,
+                "Date": date_val,
+                "Time": time_val,
                 "Venue": venue,
-                "Opponent": opp_txt,
+                "Opponent": opp_val,
                 "Status": status
             })
 
         df = pd.DataFrame(games).drop_duplicates()
         return record, df
     except Exception as e:
-        return f"Err: {e}", pd.DataFrame()
+        return f"Error: {e}", pd.DataFrame()
 
-# --- UI ---
+# --- STREAMLIT UI ---
 st.set_page_config(page_title="simple D3 score tracker", layout="wide")
+
+# Header Styles
+st.markdown("""
+    <style>
+    [data-testid="stMetricValue"] { font-size: 28px !important; color: #0f172a; }
+    </style>
+    """, unsafe_allow_html=True)
 
 st.sidebar.title("🥍 simple D3 score tracker")
 league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
@@ -105,19 +116,19 @@ record, df = get_data(SCHOOL_DATA[league][team])
 
 if not df.empty:
     c1, c2 = st.columns(2)
-    c1.metric("Record", record)
+    c1.metric("Current Record", record)
     c2.metric("Total Games", len(df))
 
-    # Bold, clean styling for iPhone
-    def highlight(val):
-        if 'W' in str(val): return 'background-color: #166534; color: white; font-weight: bold;'
-        if 'L' in str(val): return 'background-color: #991b1b; color: white; font-weight: bold;'
+    def style_table(val):
+        if 'W,' in str(val): return 'background-color: #166534; color: white; font-weight: bold; border-radius: 4px;'
+        if 'L,' in str(val): return 'background-color: #991b1b; color: white; font-weight: bold; border-radius: 4px;'
         if val == "Away": return 'color: #b45309; font-weight: bold;'
+        if val == "Home": return 'color: #64748b;'
         return ''
 
-    st.dataframe(df.style.applymap(highlight), use_container_width=True, hide_index=True)
+    st.dataframe(df.style.applymap(style_table), use_container_width=True, hide_index=True)
 else:
-    st.error("Data refresh failed. Checking connection...")
+    st.error("Site structure blocked the update. Please try another team.")
 
 st.divider()
-st.caption(f"Last sync: {datetime.now().strftime('%m/%d/%Y %I:%M %p')}")
+st.caption(f"Sync: {datetime.now().strftime('%m/%d %I:%M %p')}. Data pulled via pattern-recognition.")
