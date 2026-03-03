@@ -5,8 +5,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 
-# --- 2026 D3 TOP 20 DIRECTORY ---
-# Rankings updated as of Week 4 (March 2, 2026)
+# --- 2026 D3 TOP 20 DIRECTORY (Week 4 Rankings) ---
 SCHOOL_DATA = {
     "Men's Lacrosse": {
         "Tufts (#1)": "https://gotuftsjumbos.com/sports/mens-lacrosse/schedule/2026",
@@ -57,7 +56,7 @@ SCHOOL_DATA = {
 def get_data(url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
-        resp = requests.get(url, headers=headers, timeout=15)
+        resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
         record = "0-0"
@@ -97,31 +96,50 @@ def get_data(url):
             if res_match:
                 status = res_match.group(1).upper()
 
-            games.append({
-                "Date": date_val,
-                "Time": time_val,
-                "Venue": venue,
-                "Opponent": opp_val,
-                "Status": status
-            })
+            games.append({"Date": date_val, "Time": time_val, "Venue": venue, "Opponent": opp_val, "Status": status})
 
-        df = pd.DataFrame(games).drop_duplicates()
-        return record, df
-    except Exception as e:
-        return f"Error: {e}", pd.DataFrame()
+        return record, pd.DataFrame(games).drop_duplicates()
+    except:
+        return "N/A", pd.DataFrame()
 
 # --- STREAMLIT UI ---
-st.set_page_config(page_title="simple D3 score tracker", layout="wide")
+st.set_page_config(page_title="D3 Top 20 Tracker", layout="wide")
 
-st.sidebar.title("🥍 simple D3 score tracker")
+# Section: Top 20 Games Today
+today_str = datetime.now().strftime("%b %-d") # e.g. "Mar 3"
+st.markdown(f"## 📅 Top 20 Playing Today ({today_str})")
+
+todays_games = []
+# Pre-scan for today's games (showing a subset to keep performance high)
+for league in SCHOOL_DATA:
+    for team_name, url in SCHOOL_DATA[league].items():
+        _, df = get_data(url)
+        if not df.empty:
+            match = df[df['Date'].str.contains(today_str, case=False, na=False)]
+            for _, row in match.iterrows():
+                todays_games.append({
+                    "League": league,
+                    "Ranked Team": team_name,
+                    "Time": row['Time'],
+                    "Opponent": row['Opponent'],
+                    "Venue": row['Venue']
+                })
+
+if todays_games:
+    today_df = pd.DataFrame(todays_games)
+    st.table(today_df)
+else:
+    st.info("No Top 20 games scheduled for today.")
+
+st.divider()
+
+# Section: Individual Team Tracker
+st.sidebar.title("🥍 Team Details")
 league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
 team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[league].keys()))
 
 st.markdown(f"## {team}")
-st.markdown("### D3 Score Tracker • 2026 Season")
-
-with st.spinner("Syncing live data..."):
-    record, df = get_data(SCHOOL_DATA[league][team])
+record, df = get_data(SCHOOL_DATA[league][team])
 
 if not df.empty:
     c1, c2 = st.columns(2)
@@ -129,15 +147,10 @@ if not df.empty:
     c2.metric("Total Games", len(df))
 
     def style_table(val):
-        if 'W,' in str(val): return 'background-color: #166534; color: white; font-weight: bold; border-radius: 4px;'
-        if 'L,' in str(val): return 'background-color: #991b1b; color: white; font-weight: bold; border-radius: 4px;'
-        if val == "Away": return 'color: #b45309; font-weight: bold;'
-        if val == "Home": return 'color: #64748b;'
+        if 'W,' in str(val): return 'background-color: #166534; color: white;'
+        if 'L,' in str(val): return 'background-color: #991b1b; color: white;'
         return ''
 
     st.dataframe(df.style.applymap(style_table), use_container_width=True, hide_index=True)
-else:
-    st.error("Site structure blocked the update. Check official schedule.")
 
-st.divider()
-st.caption(f"Last sync: {datetime.now().strftime('%m/%d %I:%M %p')}. Rankings: USILA/IWLCA Week 4.")
+st.caption(f"Last updated: {datetime.now().strftime('%m/%d %I:%M %p')}")
