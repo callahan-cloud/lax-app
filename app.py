@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 
-# --- 2026 D3 TOP 20 DIRECTORY (Week 4 Rankings) ---
+# --- 2026 D3 TOP 20 DIRECTORY (Week 4 Polls - March 2, 2026) ---
 SCHOOL_DATA = {
     "Men's Lacrosse": {
         "Tufts (#1)": "https://gotuftsjumbos.com/sports/mens-lacrosse/schedule/2026",
@@ -32,31 +32,31 @@ SCHOOL_DATA = {
     "Women's Lacrosse": {
         "Middlebury (#1)": "https://athletics.middlebury.edu/sports/womens-lacrosse/schedule/2026",
         "Tufts (#2)": "https://gotuftsjumbos.com/sports/womens-lacrosse/schedule/2026",
-        "Colby (#3)": "https://colbyathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Wesleyan (#4)": "https://athletics.wesleyan.edu/sports/womens-lacrosse/schedule/2026",
-        "Salisbury (#5)": "https://suseagulls.com/sports/womens-lacrosse/schedule/2026",
-        "York (#6)": "https://ycpspartans.com/sports/womens-lacrosse/schedule/2026",
+        "Salisbury (#3)": "https://suseagulls.com/sports/womens-lacrosse/schedule/2026",
+        "Colby (#4)": "https://colbyathletics.com/sports/womens-lacrosse/schedule/2026",
+        "Franklin & Marshall (#5)": "https://godiplomats.com/sports/womens-lacrosse/schedule/2026",
+        "Denison (#6)": "https://denisonbigred.com/sports/womens-lacrosse/schedule/2026",
         "Gettysburg (#7)": "https://gettysburgsports.com/sports/womens-lacrosse/schedule/2026",
-        "Denison (#8)": "https://denisonbigred.com/sports/womens-lacrosse/schedule/2026",
-        "Franklin & Marshall (#9)": "https://godiplomats.com/sports/womens-lacrosse/schedule/2026",
-        "William Smith (#10)": "https://hwsathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Washington and Lee (#11)": "https://generalssports.com/sports/womens-lacrosse/schedule/2026",
-        "Pomona-Pitzer (#12)": "https://sagehens.com/sports/womens-lacrosse/schedule/2026",
+        "William Smith (#8)": "https://hwsathletics.com/sports/womens-lacrosse/schedule/2026",
+        "Wesleyan (#9)": "https://athletics.wesleyan.edu/sports/womens-lacrosse/schedule/2026",
+        "Stevens (#10)": "https://stevensducks.com/sports/womens-lacrosse/schedule/2026",
+        "York (#11)": "https://ycpspartans.com/sports/womens-lacrosse/schedule/2026",
+        "Washington and Lee (#12)": "https://generalssports.com/sports/womens-lacrosse/schedule/2026",
         "Amherst (#13)": "https://athletics.amherst.edu/sports/womens-lacrosse/schedule/2026",
-        "Stevens (#14)": "https://stevensducks.com/sports/womens-lacrosse/schedule/2026",
-        "TCNJ (#15)": "https://tcnjathletics.com/sports/womens-lacrosse/schedule/2026",
-        "St. John Fisher (#16)": "https://athletics.sjf.edu/sports/womens-lacrosse/schedule/2026",
-        "Scranton (#17)": "https://athletics.scranton.edu/sports/womens-lacrosse/schedule/2026",
-        "Babson (#18)": "https://babsonathletics.com/sports/womens-lacrosse/schedule/2026",
-        "Messiah (#19)": "https://gomessiah.com/sports/womens-lacrosse/schedule/2026",
-        "Haverford (#20)": "https://haverfordathletics.com/sports/womens-lacrosse/schedule/2026"
+        "Babson (#14)": "https://babsonathletics.com/sports/womens-lacrosse/schedule/2026",
+        "St. John Fisher (#15)": "https://athletics.sjf.edu/sports/womens-lacrosse/schedule/2026",
+        "MIT (#16)": "https://mitathletics.com/sports/womens-lacrosse/schedule/2026",
+        "Pomona-Pitzer (#17)": "https://sagehens.com/sports/womens-lacrosse/schedule/2026",
+        "TCNJ (#18)": "https://tcnjathletics.com/sports/womens-lacrosse/schedule/2026",
+        "Christopher Newport (#19)": "https://cnusports.com/sports/womens-lacrosse/schedule/2026",
+        "Ithaca (#20)": "https://athletics.ithaca.edu/sports/womens-lacrosse/schedule/2026"
     }
 }
 
 def get_data(url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=8)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
         record = "0-0"
@@ -70,7 +70,6 @@ def get_data(url):
         games = []
         for row in soup.select('.sidearm-schedule-game'):
             row_text = row.get_text(" ", strip=True)
-            
             date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d+', row_text, re.I)
             date_val = date_match.group(0) if date_match else "TBD"
             
@@ -103,54 +102,63 @@ def get_data(url):
         return "N/A", pd.DataFrame()
 
 # --- STREAMLIT UI ---
-st.set_page_config(page_title="D3 Top 20 Tracker", layout="wide")
+st.set_page_config(page_title="D3 Lax Tracker", layout="wide")
 
-# Section: Top 20 Games Today
-today_str = datetime.now().strftime("%b %-d") # e.g. "Mar 3"
-st.markdown(f"## 📅 Top 20 Playing Today ({today_str})")
+st.sidebar.title("🥍 Mode Selection")
+mode = st.sidebar.radio("View Mode", ["Single Team Tracker", "Today's Top 20 Games"])
 
-todays_games = []
-# Pre-scan for today's games (showing a subset to keep performance high)
-for league in SCHOOL_DATA:
-    for team_name, url in SCHOOL_DATA[league].items():
-        _, df = get_data(url)
-        if not df.empty:
-            match = df[df['Date'].str.contains(today_str, case=False, na=False)]
-            for _, row in match.iterrows():
-                todays_games.append({
-                    "League": league,
-                    "Ranked Team": team_name,
-                    "Time": row['Time'],
-                    "Opponent": row['Opponent'],
-                    "Venue": row['Venue']
-                })
+if mode == "Today's Top 20 Games":
+    today_str = datetime.now().strftime("%b %-d") # "Mar 3"
+    st.markdown(f"## 📅 Games Today: {today_str}")
+    st.write("Scanning all 40 Top 20 schedules... this takes a moment.")
+    
+    todays_games = []
+    progress_bar = st.progress(0)
+    total_teams = 40
+    current_count = 0
 
-if todays_games:
-    today_df = pd.DataFrame(todays_games)
-    st.table(today_df)
+    for league in SCHOOL_DATA:
+        for team_name, url in SCHOOL_DATA[league].items():
+            _, df = get_data(url)
+            if not df.empty:
+                match = df[df['Date'].str.contains(today_str, case=False, na=False)]
+                for _, row in match.iterrows():
+                    todays_games.append({
+                        "League": league,
+                        "Ranked Team": team_name,
+                        "Time": row['Time'],
+                        "Opponent": row['Opponent'],
+                        "Venue": row['Venue']
+                    })
+            current_count += 1
+            progress_bar.progress(current_count / total_teams)
+
+    if todays_games:
+        st.dataframe(pd.DataFrame(todays_games), use_container_width=True, hide_index=True)
+    else:
+        st.info("No Top 20 games found for today.")
+
 else:
-    st.info("No Top 20 games scheduled for today.")
+    # Single Team View (Loads fast)
+    st.sidebar.divider()
+    league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
+    team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[league].keys()))
+
+    st.markdown(f"## {team}")
+    with st.spinner("Fetching schedule..."):
+        record, df = get_data(SCHOOL_DATA[league][team])
+
+    if not df.empty:
+        c1, c2 = st.columns(2)
+        c1.metric("Record", record)
+        c2.metric("Total Games", len(df))
+
+        def style_table(val):
+            if 'W,' in str(val): return 'background-color: #166534; color: white;'
+            if 'L,' in str(val): return 'background-color: #991b1b; color: white;'
+            return ''
+
+        st.dataframe(df.style.applymap(style_table), use_container_width=True, hide_index=True)
 
 st.divider()
-
-# Section: Individual Team Tracker
-st.sidebar.title("🥍 Team Details")
-league = st.sidebar.radio("Category", ["Men's Lacrosse", "Women's Lacrosse"])
-team = st.sidebar.selectbox("Select Team", list(SCHOOL_DATA[league].keys()))
-
-st.markdown(f"## {team}")
-record, df = get_data(SCHOOL_DATA[league][team])
-
-if not df.empty:
-    c1, c2 = st.columns(2)
-    c1.metric("Current Record", record)
-    c2.metric("Total Games", len(df))
-
-    def style_table(val):
-        if 'W,' in str(val): return 'background-color: #166534; color: white;'
-        if 'L,' in str(val): return 'background-color: #991b1b; color: white;'
-        return ''
-
-    st.dataframe(df.style.applymap(style_table), use_container_width=True, hide_index=True)
-
-st.caption(f"Last updated: {datetime.now().strftime('%m/%d %I:%M %p')}")
+st.caption(f"Last updated: {datetime.now().strftime('%m/%d %I:%M %p')}. Rankings: USILA/IWLCA Week 4.")
