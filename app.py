@@ -27,7 +27,7 @@ SCHOOL_DATA = {
         "Wesleyan (#17)": "https://athletics.wesleyan.edu/sports/mens-lacrosse/schedule/2026",
         "RPI (#18)": "https://rpiathletics.com/sports/mens-lacrosse/schedule/2026",
         "Swarthmore (#19)": "https://swarthmoreathletics.com/sports/mens-lacrosse/schedule/2026",
-        "Bates (#20)": "https://gobatesbobcats.com/sports/mens-lacrosse/schedule/2026"
+        "Bates (#20)": "https://gobatesbobcats.com/sports/mens-lacrosse/schedule/2026",
         "Nazareth":  https://nazathletics.com/sports/mens-lacrosse/schedule/2026"
     },
     "Women's Lacrosse": {
@@ -163,5 +163,6 @@ else:
 
 st.divider()
 st.caption(f"Last updated: {datetime.now().strftime('%m/%d %I:%M %p')}. Rankings: USILA/IWLCA Week 4.")
+
 
 
