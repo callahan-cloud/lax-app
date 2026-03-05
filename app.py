@@ -108,36 +108,48 @@ st.set_page_config(page_title="D3 Lax Tracker", layout="wide")
 st.sidebar.title("🥍 Mode Selection")
 mode = st.sidebar.radio("View Mode", ["Single Team Tracker", "Today's Top 20 Games"])
 
+# ... (rest of the code above remains the same)
+
 if mode == "Today's Top 20 Games":
-    today_str = datetime.now().strftime("%b %-d") # "Mar 3"
+    today_str = datetime.now().strftime("%b %-d")
     st.markdown(f"## 📅 Games Today: {today_str}")
-    st.write("Scanning all 40 Top 20 schedules... this takes a moment.")
+    st.write("Scanning all schedules... this takes a moment.")
     
     todays_games = []
-    progress_bar = st.progress(0)
-    total_teams = 40
-    current_count = 0
+    
+    # Calculate total teams from the current dictionary
+    total_teams = sum(len(teams) for teams in SCHOOL_DATA.values())
+    
+    if total_teams > 0:
+        progress_bar = st.progress(0.0)
+        current_count = 0
 
-    for league in SCHOOL_DATA:
-        for team_name, url in SCHOOL_DATA[league].items():
-            _, df = get_data(url)
-            if not df.empty:
-                match = df[df['Date'].str.contains(today_str, case=False, na=False)]
-                for _, row in match.iterrows():
-                    todays_games.append({
-                        "League": league,
-                        "Ranked Team": team_name,
-                        "Time": row['Time'],
-                        "Opponent": row['Opponent'],
-                        "Venue": row['Venue']
-                    })
-            current_count += 1
-            progress_bar.progress(current_count / total_teams)
+        for league in SCHOOL_DATA:
+            for team_name, url in SCHOOL_DATA[league].items():
+                _, df = get_data(url)
+                if not df.empty:
+                    # Match today's date
+                    match = df[df['Date'].str.contains(today_str, case=False, na=False)]
+                    for _, row in match.iterrows():
+                        todays_games.append({
+                            "League": league,
+                            "Ranked Team": team_name,
+                            "Time": row['Time'],
+                            "Opponent": row['Opponent'],
+                            "Venue": row['Venue']
+                        })
+                current_count += 1
+                # FIXED LINE: Added min() to prevent floating point overflow
+                progress_bar.progress(min(current_count / total_teams, 1.0))
+        
+        progress_bar.empty() # Remove bar when done
 
     if todays_games:
         st.dataframe(pd.DataFrame(todays_games), use_container_width=True, hide_index=True)
     else:
         st.info("No Top 20 games found for today.")
+
+# ... (rest of the code below remains the same)
 
 else:
     # Single Team View (Loads fast)
@@ -163,6 +175,7 @@ else:
 
 st.divider()
 st.caption(f"Last updated: {datetime.now().strftime('%m/%d %I:%M %p')}. Rankings: USILA/IWLCA Week 4.")
+
 
 
 
